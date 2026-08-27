@@ -253,6 +253,12 @@ POS_BRIEFING_DB_URL = "postgresql://postgres.<ref>:<password>@aws-1-ap-northeast
 이 값이 없으면 앱은 로컬 `data/pos_mockup.db`로 떨어지므로, 로컬 개발은 설정 없이 그대로 된다.
 연결 문자열은 로그·화면 어디에도 표시되지 않는다.
 
+> ⚠️ **Secrets를 빠뜨리면** 저장소에 DB 파일이 없으므로 앱은 **빈 SQLite**를 보게 되고
+> `no such table: DIM_STORE` 로 죽는다. 화면이 이 상황을 알아보고 무엇을 넣어야 하는지
+> 안내하지만, 배포 시 Secrets를 **먼저** 넣는 편이 낫다.
+>
+> 변수 이름이 발행 때와 다르다 — 발행은 `POS_BRIEFING_TARGET_URL`, 화면은 `POS_BRIEFING_DB_URL` 이다.
+
 ### 4. 배포 구성 (3중 백업)
 
 | 구성 | 내용 |

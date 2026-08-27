@@ -19,6 +19,7 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 from sqlalchemy import Engine, select
+from sqlalchemy.exc import SQLAlchemyError
 from streamlit.errors import StreamlitAPIException
 
 from src.common.config import DB_PATH, DB_URL_ENV, get_engine, is_sqlite
@@ -68,6 +69,44 @@ def database_url() -> str | None:
         secret = None
 
     return str(secret) if secret else None
+
+
+def connection_help(url: str, error_text: str) -> str:
+    """연결이 안 될 때 **운영자**에게 보여 줄 안내를 만든다 (명세 15장).
+
+    이 화면은 점포장이 아니라 배포한 사람을 위한 것이다. 트레이스백만 뜨면
+    무엇을 고쳐야 하는지 알 수 없어 발표 직전에 손을 쓸 수 없다.
+
+    연결 문자열은 **가려서** 넣는다 — 비밀번호가 화면에 뜨면 안 된다 (ADR-0011).
+
+    Args:
+        url: 붙으려던 연결 URL.
+        error_text: 드라이버가 준 오류 문구.
+
+    Returns:
+        고칠 방법이 담긴 안내문 (마크다운).
+    """
+    from src.load.publish import diagnose, mask_url
+
+    return (
+        f"데이터에 연결하지 못했어요.\n\n"
+        f"- 연결 대상: `{mask_url(url)}`\n"
+        f"- 확인할 점: {diagnose(error_text)}\n\n"
+        f"배포 설정(Secrets)의 `{DB_URL_ENV}` 값을 확인해 주세요."
+    )
+
+
+def missing_connection_help() -> str:
+    """연결 설정 자체가 없을 때의 안내를 만든다 (명세 15장).
+
+    Returns:
+        무엇을 넣어야 하는지 알려 주는 안내문 (마크다운).
+    """
+    return (
+        f"배포 설정에 연결 정보가 없어 이 서버의 빈 파일을 보고 있어요.\n\n"
+        f"Streamlit Cloud 앱의 **Settings → Secrets** 에 아래 한 줄을 넣어 주세요.\n\n"
+        f"```toml\n{DB_URL_ENV} = \"postgresql://...\"\n```"
+    )
 
 
 def load_stores(engine: Engine) -> pd.DataFrame:
@@ -419,8 +458,19 @@ def main() -> None:
     """화면 전체를 그린다."""
     st.set_page_config(page_title=PAGE_TITLE, page_icon="🏪", layout="centered")
 
-    engine = get_engine(database_url())
-    stores = load_stores(engine)
+    configured = database_url()
+    engine = get_engine(configured)
+
+    try:
+        stores = load_stores(engine)
+    except SQLAlchemyError as error:
+        # 연결·스키마 문제는 삼키지 않는다 (명세 14장). 대신 운영자가 고칠 수 있는
+        # 말로 바꿔서 보여 준다 — 배포 사고에서 트레이스백만으로는 손을 쓸 수 없었다.
+        if configured:
+            st.error(connection_help(configured, str(error)))
+        else:
+            st.error(missing_connection_help())
+        return
 
     if stores.empty:
         st.warning(

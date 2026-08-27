@@ -442,3 +442,39 @@ def test_cloud_entry_point_renders_without_exception(built_engine: Engine) -> No
 
     assert not app_test.exception, [error.value for error in app_test.exception]
     assert any("오늘의 브리핑" in block.value for block in app_test.markdown)
+
+
+def test_app_explains_missing_connection_instead_of_crashing(tmp_path: Path) -> None:
+    """연결이 안 되면 트레이스백 대신 **무엇을 고쳐야 하는지** 보여 준다.
+
+    클라우드 배포에서 실제로 겪은 사고다. 표가 없는 빈 DB를 만나면
+    `load_stores` 가 그대로 터져 운영자가 원인을 알 수 없었다 (명세 15장).
+    """
+    from streamlit.testing.v1 import AppTest
+
+    empty_db = tmp_path / "empty.db"
+    empty_db.touch()
+
+    app_test = AppTest.from_file(str(_repo_root() / "streamlit_app.py"), default_timeout=60)
+    app_test.secrets["POS_BRIEFING_DB_URL"] = f"sqlite:///{empty_db}"
+
+    app_test.run()
+
+    assert not app_test.exception, [error.value for error in app_test.exception]
+    shown = " ".join(block.value for block in app_test.error) + " ".join(
+        block.value for block in app_test.warning
+    )
+    assert "POS_BRIEFING_DB_URL" in shown
+
+
+def test_connection_failure_never_shows_credentials(tmp_path: Path) -> None:
+    """진단 화면에도 비밀번호가 새지 않는다 (ADR-0011)."""
+    from src.app import main
+
+    message = main.connection_help(
+        "postgresql://postgres.abcd:SuperSecret123@aws-1-x.pooler.supabase.com:5432/postgres",
+        "could not translate host name",
+    )
+
+    assert "SuperSecret123" not in message
+    assert "postgres.abcd" not in message
