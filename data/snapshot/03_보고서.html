@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>③ 일일 보고서</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1c2733;--muted:#5c6b7a;
+--line:#dfe4ea;--navy:#22324a;--cream:#fff3df;--gold:#e0b15e;
+--up:#c0392b;--down:#2266cc}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 20px 64px;background:var(--bg);color:var(--ink);
+font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo","Noto Sans KR",
+system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.65}
+.wrap{max-width:980px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;
+justify-content:space-between;border-bottom:2px solid var(--navy);padding-bottom:14px}
+h1{font-size:26px;margin:0}
+h2{font-size:20px;margin:36px 0 12px}
+h3{font-size:16px;margin:24px 0 8px;color:var(--muted)}
+.badge{display:inline-block;background:var(--cream);border:1px solid var(--gold);
+color:#5c430f;border-radius:999px;padding:4px 14px;font-size:14px;font-weight:700}
+.meta{color:var(--muted);font-size:14px}
+nav{margin:18px 0 8px;display:flex;flex-wrap:wrap;gap:10px}
+nav a{display:inline-block;padding:8px 16px;border:1px solid var(--line);
+border-radius:8px;background:var(--card);color:var(--navy);text-decoration:none;font-size:14px}
+nav a:hover{background:var(--cream)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+padding:20px 24px;margin:16px 0}
+.store-name{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px}
+.cards-tag{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px}
+.line{font-size:19px;font-weight:700;margin:10px 0}
+.metrics{display:flex;flex-wrap:wrap;gap:16px;margin:8px 0}
+.metric{flex:1 1 190px;background:var(--card);border:1px solid var(--line);
+border-radius:12px;padding:16px 20px}
+.metric .label{font-size:14px;color:var(--muted)}
+.metric .value{font-size:26px;font-weight:800;margin:4px 0}
+.metric .delta{font-size:14px}
+table{border-collapse:collapse;width:100%;background:var(--card);
+border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);font-size:15px}
+th{background:var(--navy);color:#dce7f5;font-weight:700}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.same{background:var(--cream);border:1px solid var(--gold);color:#5c430f;
+border-radius:10px;padding:14px 18px;font-weight:700;margin-top:14px}
+.note{color:var(--muted);font-size:13px;margin-top:8px}
+footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);
+color:var(--muted);font-size:13px}
+svg{display:block;max-width:100%;height:auto;background:var(--card);
+border:1px solid var(--line);border-radius:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><h1>③ 일일 보고서</h1><div><span class="badge">🧪 목업 데이터</span></div></header>
+<p class="meta">기준일 2026-07-03 · 동부역 중형점</p>
+<nav><a href="index.html">목차</a><a href="01_브리핑.html">① 브리핑</a><a href="02_자세히.html">② 자세히</a><a href="04_관리자.html">④ 관리자</a></nav>
+<h2>일일 보고</h2><p class="note">화면의 [보고서 내려받기(.xlsx)] 버튼이 만드는 파일과 같은 내용입니다. 파일명: 일일보고_동부역 중형점_20260703.xlsx</p><h3>요약</h3><table><tr><th>항목</th><th class="num">값</th><th class="num">그저께 대비</th></tr><tr><td>매출</td><td class="num">1,025,800원</td><td class="num">-13.7%</td></tr><tr><td>손님 수</td><td class="num">332명</td><td class="num">-9.8%</td></tr><tr><td>1인당 구매액</td><td class="num">3,090원</td><td class="num">-4.3%</td></tr></table><h3>오늘의 브리핑</h3><div class="card"><ol><li>어제 1,025,800원 — 평소 금요일보다 7.8% 조용한 하루였어요 🔻</li><li>점심 손님이 몰리기 전(12~13시)에 진열을 한 번 봐주세요 — 하루 매출의 33.3%가 이때 나와요</li><li>그저께와 비교하면, 손님 수(-9.8%) 영향이 컸어요 — 1인당 구매액은 -4.3%였어요</li></ol></div><h3>TOP5</h3><table><tr><th>순위</th><th>상품명</th><th>분류</th><th class="num">매출</th><th class="num">판매수량</th></tr><tr><td>1</td><td>농심)백산수500ml</td><td>음료</td><td class="num">53,000원</td><td class="num">53개</td></tr><tr><td>2</td><td>영우)전주비빔참치마요김밥</td><td>Fresh Food</td><td class="num">43,200원</td><td class="num">16개</td></tr><tr><td>3</td><td>크리오)휴대용칫솔치약세트</td><td>잡화</td><td class="num">42,000원</td><td class="num">12개</td></tr><tr><td>4</td><td>티머니)트래블카드</td><td>기타</td><td class="num">40,000원</td><td class="num">10개</td></tr><tr><td>5</td><td>진주)천하장사콰트로치즈50g</td><td>식료</td><td class="num">36,000원</td><td class="num">15개</td></tr></table><h3>시간대</h3><table><tr><th>시간대</th><th class="num">매출</th><th class="num">손님 수</th></tr><tr><td>05시</td><td class="num">2,100원</td><td class="num">1명</td></tr><tr><td>06시</td><td class="num">51,000원</td><td class="num">13명</td></tr><tr><td>07시</td><td class="num">90,800원</td><td class="num">32명</td></tr><tr><td>08시</td><td class="num">82,000원</td><td class="num">23명</td></tr><tr><td>09시</td><td class="num">40,100원</td><td class="num">17명</td></tr><tr><td>10시</td><td class="num">38,850원</td><td class="num">9명</td></tr><tr><td>11시</td><td class="num">59,200원</td><td class="num">24명</td></tr><tr><td>12시</td><td class="num">184,450원</td><td class="num">57명</td></tr><tr><td>13시</td><td class="num">157,150원</td><td class="num">44명</td></tr><tr><td>14시</td><td class="num">39,800원</td><td class="num">18명</td></tr><tr><td>15시</td><td class="num">30,500원</td><td class="num">8명</td></tr><tr><td>16시</td><td class="num">47,000원</td><td class="num">12명</td></tr><tr><td>17시</td><td class="num">48,400원</td><td class="num">20명</td></tr><tr><td>18시</td><td class="num">83,000원</td><td class="num">25명</td></tr><tr><td>19시</td><td class="num">32,500원</td><td class="num">13명</td></tr><tr><td>20시</td><td class="num">24,850원</td><td class="num">11명</td></tr><tr><td>21시</td><td class="num">15,600원</td><td class="num">5명</td></tr><tr><td>22시</td><td class="num">-1,500원</td><td class="num">0명</td></tr></table>
+<footer>본 화면의 수치는 운영 참고용입니다. 정산·회계 기준이 아닙니다.<br>인터넷·서버 없이 열리는 저장본입니다 (명세 15장 보험 2).</footer>
+</div>
+</body>
+</html>

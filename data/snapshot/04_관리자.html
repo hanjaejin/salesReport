@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>④ 관리자 — 멱등 시연</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1c2733;--muted:#5c6b7a;
+--line:#dfe4ea;--navy:#22324a;--cream:#fff3df;--gold:#e0b15e;
+--up:#c0392b;--down:#2266cc}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 20px 64px;background:var(--bg);color:var(--ink);
+font-family:"Malgun Gothic","맑은 고딕","Apple SD Gothic Neo","Noto Sans KR",
+system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.65}
+.wrap{max-width:980px;margin:0 auto}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:baseline;
+justify-content:space-between;border-bottom:2px solid var(--navy);padding-bottom:14px}
+h1{font-size:26px;margin:0}
+h2{font-size:20px;margin:36px 0 12px}
+h3{font-size:16px;margin:24px 0 8px;color:var(--muted)}
+.badge{display:inline-block;background:var(--cream);border:1px solid var(--gold);
+color:#5c430f;border-radius:999px;padding:4px 14px;font-size:14px;font-weight:700}
+.meta{color:var(--muted);font-size:14px}
+nav{margin:18px 0 8px;display:flex;flex-wrap:wrap;gap:10px}
+nav a{display:inline-block;padding:8px 16px;border:1px solid var(--line);
+border-radius:8px;background:var(--card);color:var(--navy);text-decoration:none;font-size:14px}
+nav a:hover{background:var(--cream)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;
+padding:20px 24px;margin:16px 0}
+.store-name{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:4px}
+.cards-tag{font-size:12px;color:var(--muted);font-weight:400;margin-left:8px}
+.line{font-size:19px;font-weight:700;margin:10px 0}
+.metrics{display:flex;flex-wrap:wrap;gap:16px;margin:8px 0}
+.metric{flex:1 1 190px;background:var(--card);border:1px solid var(--line);
+border-radius:12px;padding:16px 20px}
+.metric .label{font-size:14px;color:var(--muted)}
+.metric .value{font-size:26px;font-weight:800;margin:4px 0}
+.metric .delta{font-size:14px}
+table{border-collapse:collapse;width:100%;background:var(--card);
+border:1px solid var(--line);border-radius:12px;overflow:hidden}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);font-size:15px}
+th{background:var(--navy);color:#dce7f5;font-weight:700}
+tr:last-child td{border-bottom:none}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.same{background:var(--cream);border:1px solid var(--gold);color:#5c430f;
+border-radius:10px;padding:14px 18px;font-weight:700;margin-top:14px}
+.note{color:var(--muted);font-size:13px;margin-top:8px}
+footer{margin-top:48px;padding-top:16px;border-top:1px solid var(--line);
+color:var(--muted);font-size:13px}
+svg{display:block;max-width:100%;height:auto;background:var(--card);
+border:1px solid var(--line);border-radius:12px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header><h1>④ 관리자 — 멱등 시연</h1><div><span class="badge">🧪 목업 데이터</span></div></header>
+<p class="meta">재생성 대상 2026-07-25 ~ 2026-07-31</p>
+<nav><a href="index.html">목차</a><a href="01_브리핑.html">① 브리핑</a><a href="02_자세히.html">② 자세히</a><a href="03_보고서.html">③ 보고서</a></nav>
+<h2>관리자 — 최근 7일 재생성</h2><p class="note">발표 노트북에 터미널이 없어도 멱등을 보여 주기 위한 버튼입니다. 같은 기간을 다시 만들어도 숫자가 그대로라는 것을 화면에서 증명합니다.</p><p class="meta">대상 기간 2026-07-25 ~ 2026-07-31 · 소요 2.029초</p><table><tr><th>항목</th><th class="num">실행 전</th><th class="num">실행 후</th></tr><tr><td>총매출</td><td class="num">28,203,750원</td><td class="num">28,203,750원</td></tr><tr><td>거래건수</td><td class="num">9,040건</td><td class="num">9,040건</td></tr></table><div class="same">몇 번을 다시 만들어도 같은 결과예요</div><p class="note">데이터는 (기본 시드, 점포, 날짜)에서 파생한 시드로 만들어집니다. 어떤 구간을 몇 번 다시 만들어도 같은 값이 나오는 이유입니다.</p>
+<footer>본 화면의 수치는 운영 참고용입니다. 정산·회계 기준이 아닙니다.<br>인터넷·서버 없이 열리는 저장본입니다 (명세 15장 보험 2).</footer>
+</div>
+</body>
+</html>

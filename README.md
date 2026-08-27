@@ -72,6 +72,35 @@ CLI 옵션:
 
 ---
 
+## 오프라인 스냅샷 (발표 백업 — 명세 15장 보험 2)
+
+```bash
+python -m src.report.snapshot --date 20260703
+```
+
+`data/snapshot/`에 **인터넷·서버 없이 열리는 HTML 5장**을 만든다 — 목차 + 브리핑·자세히·보고서·관리자.
+총 31KB이고 외부 참조(CDN·그림·웹폰트)가 하나도 없어, **폴더째 USB에 담아 더블클릭하면 열린다.**
+차트는 인라인 SVG로 직접 그린다 ([ADR-0010](doc/adr/0010-정적-스냅샷은-자체완결-HTML로-만들고-저장소에-넣는다.md)).
+
+| 장 | 내용 |
+|---|---|
+| `index.html` | 목차 |
+| `01_브리핑.html` | 세 점포의 3줄 — 점포마다 다른 문장 |
+| `02_자세히.html` | 매출·손님 수·1인당 구매액, 시간대 차트, TOP5, 최근 흐름 |
+| `03_보고서.html` | 내려받는 일일 보고 xlsx와 같은 내용 |
+| `04_관리자.html` | 최근 7일 재생성 전/후 수치 비교 (멱등 증거) |
+
+| 옵션 | 설명 |
+|---|---|
+| `--date` | 기준일 `YYYYMMDD` (필수) |
+| `--out` | 저장 디렉토리 (기본 `data/snapshot`) |
+| `--no-regen` | 관리자 장의 재생성 측정을 건너뛴다 (기본은 실제로 돌려 전/후를 잰다) |
+
+> 관리자 장은 기본적으로 `load_period()`를 **실제로 호출**해 전/후를 측정한다.
+> 멱등이라 데이터는 바뀌지 않으며, 값이 달라지면 스냅샷에 그대로 적는다.
+
+---
+
 ## 구조
 
 ```text
@@ -82,10 +111,12 @@ project02_salesReport/
 │   ├── generate/synth.py                    합성 데이터 생성
 │   ├── load/{schema,pipeline}.py            DDL·적재 파이프라인
 │   ├── mart/{aggregate,briefing}.py         집계·브리핑 문장 생성
-│   ├── report/daily_report.py               xlsx 일일 보고서
+│   ├── report/{daily_report,snapshot}.py    xlsx 보고서·오프라인 HTML 스냅샷
 │   └── app/main.py                          Streamlit 화면
 ├── tests/
-├── data/            DB 파일·씨앗 엑셀 (git 제외 — ADR-0001)
+├── data/
+│   ├── (pos_mockup.db·씨앗 엑셀)            git 제외 — ADR-0001
+│   └── snapshot/                            발표 백업 HTML (커밋 대상 — ADR-0010)
 └── doc/             명세·흐름도·ADR
 ```
 
@@ -142,6 +173,7 @@ project02_salesReport/
 - [ ] 화면에 전문용어 없음, 목업 배지 상시
 - [ ] 첫 브리핑 표시 3초 이내
 - [ ] 관리자 [최근 7일 재생성] 실행 전/후 수치 동일
+- [ ] `data/snapshot/index.html`을 인터넷 끊고 열어 4장 모두 확인 (보험 2)
 
 ---
 
@@ -174,7 +206,7 @@ git push
 |---|---|
 | 주력 | Streamlit Community Cloud → `https://….streamlit.app`. 진입점 `src/app/main.py` |
 | 보험 1 | Hugging Face Spaces (같은 저장소·Streamlit 무료) → URL 2개 체제 |
-| 보험 2 | 녹화 영상(2분 30초) + 정적 HTML 스냅샷 3~4장 — USB + 클라우드 이중 보관 |
+| 보험 2 | 녹화 영상(2분 30초) + **정적 HTML 스냅샷** `data/snapshot/` (생성 완료) — USB + 저장소 이중 보관 |
 | QR 체험 | 슬라이드에 URL QR 1장 — 청중이 자기 폰으로 직접 열어 보는 연출 |
 
 발표 노트북 요구사항은 **브라우저 + USB 포트가 전부**다 (설치 0).
