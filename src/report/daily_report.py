@@ -51,8 +51,13 @@ def report_filename(dept_nm: str, saledate: str) -> str:
     return f"일일보고_{dept_nm}_{saledate}.xlsx"
 
 
-def _fetch(engine: Engine, saledate: str, dept_cd: str) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
+def fetch_report_data(
+    engine: Engine, saledate: str, dept_cd: str
+) -> tuple[dict, pd.DataFrame, pd.DataFrame]:
     """보고서에 쓸 자료를 마트와 브리핑에서 읽는다.
+
+    xlsx 보고서와 정적 HTML 스냅샷이 **같은 값**을 쓰도록 공개한다 —
+    두 산출물의 숫자가 갈라질 여지를 없앤다.
 
     Args:
         engine: 대상 엔진.
@@ -212,7 +217,7 @@ def build_workbook(engine: Engine, saledate: str, dept_cd: str) -> Workbook:
     Raises:
         LookupError: 해당 일자·점포의 브리핑이 없을 때.
     """
-    payload, top_items, hourly = _fetch(engine, saledate, dept_cd)
+    payload, top_items, hourly = fetch_report_data(engine, saledate, dept_cd)
 
     workbook = Workbook()
     summary = workbook.active
@@ -260,7 +265,7 @@ def write_daily_report(
     Raises:
         LookupError: 해당 일자·점포의 브리핑이 없을 때.
     """
-    payload, _, _ = _fetch(engine, saledate, dept_cd)
+    payload, _, _ = fetch_report_data(engine, saledate, dept_cd)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / report_filename(payload["dept_nm"], saledate)
