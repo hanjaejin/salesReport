@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 테스트·도구 캐시
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# OMC 운영 산출물
+.omc/
+
+# 데이터 산출물
+# - 구축 완료 DB는 배포 시점에만 강제 추가한다 (ADR-0001)
+data/pos_mockup.db
+data/pos_mockup.db-journal
+# - 씨앗 원본 엑셀은 저장소에 넣지 않는다. 추출된 상품 사전 JSON만 커밋한다 (ADR-0002)
+data/*.xlsx
+data/*.txt
+# - 화면에서 내려받은 보고서 산출물
+data/report/
+*.xlsx.tmp
+
+# 편집기
+.vscode/
+.idea/
+*.swp

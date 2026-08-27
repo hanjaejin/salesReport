@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>30초 매장 브리핑 — 업무·프로그램 흐름도</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<style>
+  :root{
+    --ink:#1C2733; --paper:#FBFAF7;
+    --dawn:#22324A; --dawn-soft:#E9EFF8; --dawn-line:#8FA6C6;
+    --morn:#FFF3DF; --morn-line:#E0B15E; --amber:#C77E1F;
+    --rail:#145C9E; --danger:#B23A32; --ok:#2E7D5B;
+    --mono:ui-monospace,'Cascadia Code','D2Coding',Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--paper);color:var(--ink);
+    font-family:'Apple SD Gothic Neo','Pretendard','Malgun Gothic','Noto Sans KR',sans-serif;
+    font-size:15px;line-height:1.75;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1060px;margin:0 auto;padding:0 28px 120px}
+
+  /* ── 헤더: 하루의 띠 ── */
+  header{padding:64px 0 0}
+  .doc-eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.18em;color:var(--rail);font-weight:700}
+  h1{font-size:clamp(30px,4.5vw,44px);font-weight:900;letter-spacing:-.02em;line-height:1.25;margin:10px 0 6px}
+  .doc-sub{color:#5B6672;max-width:760px}
+  .dayband{display:flex;border-radius:14px;overflow:hidden;margin:30px 0 8px;
+    border:1px solid #D8D2C6;font-family:var(--mono);font-size:11.5px;font-weight:700}
+  .dayband>div{padding:14px 12px 12px;position:relative}
+  .db-dawn{flex:5;background:linear-gradient(90deg,#1B2A40,#2A4062);color:#CBD9EE}
+  .db-morn{flex:4;background:linear-gradient(90deg,#FFEFD3,#FFF7E9);color:#8A5E14}
+  .db-day{flex:3;background:#F2EFE7;color:#6B6455}
+  .dayband small{display:block;font-weight:400;letter-spacing:.06em;opacity:.85;margin-top:3px}
+  .legend{display:flex;gap:22px;font-size:12.5px;color:#5B6672;margin-top:14px;flex-wrap:wrap}
+  .legend b{font-weight:700}
+  .chip{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+  .chip.d{background:var(--dawn)} .chip.m{background:var(--morn);border:1px solid var(--morn-line)}
+
+  /* ── 섹션 ── */
+  section{margin-top:84px}
+  .sec-head{display:flex;align-items:baseline;gap:14px;border-bottom:3px solid var(--ink);padding-bottom:10px;margin-bottom:6px}
+  .sec-no{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--rail);letter-spacing:.1em}
+  h2{font-size:24px;font-weight:900;letter-spacing:-.01em}
+  .sec-lead{color:#4A5560;margin:14px 0 22px;max-width:860px}
+  .diagram{background:#fff;border:1px solid #E2DDD2;border-radius:14px;padding:22px 18px;overflow-x:auto}
+  .diagram .mermaid{display:flex;justify-content:center}
+  .cap{font-size:12.5px;color:#7A7466;margin-top:8px;font-family:var(--mono)}
+
+  /* 설명 블록 */
+  .explain{margin-top:26px;display:grid;gap:18px}
+  h3{font-size:16.5px;font-weight:800;margin-bottom:6px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;background:#fff;border:1px solid #E2DDD2;border-radius:10px;overflow:hidden}
+  th{background:#F1EEE6;text-align:left;padding:9px 12px;font-size:12.5px;letter-spacing:.03em;border-bottom:1px solid #E2DDD2}
+  td{padding:9px 12px;border-bottom:1px solid #EFEBE1;vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  td code, p code{font-family:var(--mono);font-size:12.5px;background:#F1EEE6;padding:1px 6px;border-radius:5px}
+  .callout{border-left:4px solid var(--rail);background:#EFF4FA;border-radius:0 10px 10px 0;padding:14px 18px;font-size:14px}
+  .callout.warn{border-color:var(--danger);background:#FBEFEE}
+  .callout.gold{border-color:var(--amber);background:var(--morn)}
+  .callout b{font-weight:800}
+  ul{padding-left:20px} li{margin:4px 0}
+  footer{margin-top:100px;padding-top:20px;border-top:1px solid #D8D2C6;font-size:12.5px;color:#8A8577;font-family:var(--mono)}
+  @media (max-width:640px){ .legend{gap:12px} h1{font-size:28px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="doc-eyebrow">KORAIL RETAIL · AI CHAMPION BLACK · 구현 흐름 명세</div>
+  <h1>30초 매장 브리핑<br>업무 흐름 · 프로그램 흐름 도해</h1>
+  <p class="doc-sub">구현체(MIN 데모)의 하루가 어떻게 흘러가고, 그 밑에서 프로그램이 어떤 순서로 무엇을 만드는지를 7장의 그림으로 설명한다.
+  기준 문서: 바이브코딩 구현 설계서 v1.2 · 피벗 설계서 v1.0</p>
+
+  <div class="dayband">
+    <div class="db-dawn">00:00 – 06:00 새벽 · 서버의 시간<small>마감 → 재생성 적재 → 집계 → 브리핑 문장 생성·저장 (사람 개입 0)</small></div>
+    <div class="db-morn">아침 · 점포장의 시간<small>브리핑 3줄 읽기 30초 → 보고서 내려받기 1클릭</small></div>
+    <div class="db-day">낮 · 매장의 시간<small>손님 응대 — 시스템은 조용히 대기</small></div>
+  </div>
+  <div class="legend">
+    <span><span class="chip d"></span><b>남색 영역</b> = 서버가 일함 (문장 생성까지 새벽에 완료)</span>
+    <span><span class="chip m"></span><b>크림 영역</b> = 사용자는 읽기만 (키·설치·AI 개념 없음)</span>
+  </div>
+</header>
+
+<!-- ════ 1. 업무 흐름 As-Is → To-Be ════ -->
+<section>
+  <div class="sec-head"><span class="sec-no">FLOW 01</span><h2>업무 흐름 — 무엇이 사라지고 무엇이 남는가</h2></div>
+  <p class="sec-lead">왼쪽(현행)은 점포장과 관리자가 <b>같은 숫자를 세 번 만드는</b> 구조다. 오른쪽(개선)에서 점선 상자의 업무는 시스템이 흡수해 <b>소멸</b>하고, 사람에게는 판단과 실행만 남는다.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph ASIS["현행 As-Is — 사람이 나른다"]
+    direction TB
+    a1["점포장: 기간계 접속<br/>느린 조회 대기"] --> a2["엑셀 일일 보고 작성"]
+    a2 --> a3["제각각 채널로 전송<br/>(메일·게시판·메신저)"]
+    a3 --> a4["권역: 수합·독촉<br/>단순 합산"]
+    a4 --> a5["본사: 재취합·눈검증"]
+  end
+  subgraph TOBE["개선 To-Be — 시스템이 나른다"]
+    direction TB
+    b1["새벽 배치가 계산·문장까지 완료"]:::dawn --> b2["점포장: 브리핑 3줄 읽기<br/>(30초, 선택)"]:::morn
+    b1 --> b3["보고서: 이미 생성되어 있음<br/>내려받기 1클릭"]:::morn
+    b3 --> b4["수신자: 접속하면 이미 있음<br/>(전송의 소멸)"]:::morn
+  end
+  ASIS -. "조회·작성·전송·취합 업무 소멸" .-> TOBE
+  classDef dawn fill:#22324A,color:#DCE7F5,stroke:#22324A;
+  classDef morn fill:#FFF3DF,color:#5C430F,stroke:#E0B15E;
+  </pre></div>
+  <div class="explain">
+    <div class="callout gold"><b>핵심 재정의.</b> "볼 시간이 없다"는 현장 조건을 받아들여, 보러 가는 제품(풀)을 배달받는 제품(푸시)으로 바꿨다.
+    사용자에게 요구하는 시간은 하루 30초, 돌려주는 시간은 보고 작성 시간 전부 — 이 <b>시간 수지의 흑자</b>가 제품의 존재 증명이다.</div>
+  </div>
+</section>
+
+<!-- ════ 2. 하루 운영 사이클 ════ -->
+<section>
+  <div class="sec-head"><span class="sec-no">FLOW 02</span><h2>하루 운영 사이클 — 시간축으로 본 시스템</h2></div>
+  <p class="sec-lead">시스템의 하루는 자정에 시작한다. 새벽 4단계(남색)가 끝나면 그날 매장에서 일어나는 일(크림)은 전부 <b>읽기</b>뿐이다.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  t0["00:00<br/>영업 마감<br/>어제 데이터 확정"]:::dawn --> t1["01:00 적재<br/>기간 재생성<br/>(날짜단위 멱등)"]:::dawn
+  t1 --> t2["집계<br/>일·시간대·상품<br/>마트 재계산"]:::dawn
+  t2 --> t3["브리핑 생성<br/>규칙 판정 → 3줄 문장<br/>BRIEFING_DAILY 저장"]:::dawn
+  t3 --> t4["06:00 이전<br/>준비 완료"]:::dawn
+  t4 --> m1["아침(점포장 원하는 시각)<br/>화면 열기 → 3줄 30초"]:::morn
+  m1 --> m2["보고서 내려받기<br/>1클릭 → 제출 끝"]:::morn
+  m1 -.-> m3["(선택) 자세히 펼치기<br/>매출·손님수·TOP5·시간대"]:::morn
+  m1 -.-> m4["확인했어요 / 괜찮아요<br/>→ FEEDBACK_LOG"]:::morn
+  classDef dawn fill:#22324A,color:#DCE7F5,stroke:#22324A;
+  classDef morn fill:#FFF3DF,color:#5C430F,stroke:#E0B15E;
+  </pre></div>
+  <div class="explain">
+    <table>
+      <tr><th style="width:130px">시각</th><th>일어나는 일</th><th style="width:300px">설계 근거</th></tr>
+      <tr><td><code>00:00</code></td><td>자정 마감 — 어제 데이터가 확정치가 된다</td><td>아침 화면의 숫자는 항상 확정치 (잠정 표기 불필요)</td></tr>
+      <tr><td><code>01:00~</code></td><td>파이프라인이 어제까지의 기간을 재생성 적재</td><td>같은 기간을 두 번 돌려도 결과 동일(멱등) — 실패 시 재실행 안전</td></tr>
+      <tr><td>이어서</td><td>마트 3종 재계산 → 브리핑 규칙 판정 → 3줄 문장을 DB에 저장</td><td><b>서버측 생성 원칙</b>: 문장까지 새벽에 완성 (원칙 7)</td></tr>
+      <tr><td>아침</td><td>점포장이 원하는 시각에 열람 — 계산 없이 저장된 JSON을 읽기만</td><td>3초 표시 목표의 비밀 · 아침 동선이 점포마다 달라도 무관</td></tr>
+    </table>
+    <div class="callout"><b>왜 "새벽에 문장까지"인가.</b> 문장을 열람 시점에 만들면 사용자 기기의 성능·키·모델이 문제가 된다.
+    새벽에 서버 1대가 전 점포 문장을 만들어 두면 — 신문 인쇄처럼 — 매장 기기는 종이(글자)만 받는다.
+    고연령·저사양 POS·API 키 걱정이 구조적으로 사라지는 지점이다.</div>
+  </div>
+</section>
+
+<!-- ════ 3. 프로그램 모듈 구조 ════ -->
+<section>
+  <div class="sec-head"><span class="sec-no">FLOW 03</span><h2>프로그램 모듈 구조 — 코드가 놓이는 자리</h2></div>
+  <p class="sec-lead">데이터는 왼쪽에서 오른쪽으로만 흐른다. 점선 상자(OracleExtractor)는 데모에서 비어 있는 <b>미래의 소켓</b> — 같은 계약(인터페이스)을 지키므로 기간계 연동은 이 상자만 채우면 된다.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph SRC["데이터 소스 계층 — src/extract"]
+    direction TB
+    s1["SampleExtractor<br/>합성 13개월 · 청크 5만행"]:::dawn
+    s2["OracleExtractor<br/>(스텁 — 목업 이후)"]:::stub
+    seed["실샘플 엑셀 (씨앗)<br/>점포 1곳 · 1일 · 30건<br/>컬럼구조·상품/가격 사전"]:::stub --> g1
+    g1["generate/synth.py<br/>파생 시드 · 점포별 프로파일<br/>→ 3곳 × 13개월 합성"]:::dawn --> s1
+  end
+  subgraph LOAD["적재 — src/load"]
+    p1["pipeline.py<br/>load_period(from,to)<br/>DELETE→INSERT 멱등"]:::dawn
+  end
+  subgraph DB["SQLite — data/pos_mockup.db"]
+    direction TB
+    f1[("FACT_RECEIPT<br/>FACT_RECEIPT_ITEM<br/>FACT_PAYMENT")]:::db
+    m1[("MART_DAY_STORE<br/>MART_HOUR_STORE<br/>MART_DAY_STORE_ITEM")]:::db
+    b1[("BRIEFING_DAILY<br/>완성된 3줄 + 계산 JSON")]:::db
+  end
+  subgraph CALC["계산·문장 — src/mart"]
+    c1["aggregate.py<br/>집계 (숫자는 여기서만)"]:::dawn
+    c2["briefing.py<br/>규칙 판정 + 템플릿 치환"]:::dawn
+  end
+  subgraph APP["매장 접점 — src/app · report"]
+    a1["main.py (Streamlit)<br/>표시만 · 재계산 금지"]:::morn
+    a2["daily_report.py<br/>일일보고 .xlsx"]:::morn
+  end
+  s1 --> p1 --> f1 --> c1 --> m1 --> c2 --> b1
+  s2 -.같은 인터페이스.-> p1
+  b1 --> a1
+  m1 --> a2
+  a1 --> fb[("FEEDBACK_LOG")]:::db
+  classDef dawn fill:#22324A,color:#DCE7F5,stroke:#22324A;
+  classDef morn fill:#FFF3DF,color:#5C430F,stroke:#E0B15E;
+  classDef db fill:#EFF4FA,color:#1C2733,stroke:#8FA6C6;
+  classDef stub fill:#fff,color:#8A8577,stroke:#B8B2A4,stroke-dasharray:5 4;
+  </pre></div>
+  <div class="explain">
+    <table>
+      <tr><th style="width:200px">모듈</th><th>책임 (한 가지씩만)</th><th style="width:280px">지키는 원칙</th></tr>
+      <tr><td>실샘플 엑셀 (씨앗)</td><td>점포 1곳·1일·30건 소량 — 데이터가 아니라 <b>씨앗</b>: 실컬럼 구조, 상품·가격 사전, 패턴 근거 제공</td><td>13개월치는 씨앗으로 만든 가상 데이터 — 화면 배지로 정직 고지</td></tr>
+      <tr><td><code>generate/synth.py</code></td><td>씨앗 사전 기반 합성 데이터 생성 — 점포 3곳 프로파일 차등</td><td>(날짜,점포) 파생 시드 → 부분 재생성도 동일 결과</td></tr>
+      <tr><td><code>extract/</code></td><td>기간을 받아 청크 반복자로 공급</td><td>Extractor 계약 고정 — Oracle 교체 지점</td></tr>
+      <tr><td><code>load/pipeline.py</code></td><td>기간 재생성 적재 + 마트·브리핑 갱신 지휘</td><td>날짜 단위 멱등 · 청크 스트리밍</td></tr>
+      <tr><td><code>mart/aggregate.py</code></td><td>모든 수치 계산</td><td>숫자는 코드만 · ITEM×PAYMENT 조인 금지</td></tr>
+      <tr><td><code>mart/briefing.py</code></td><td>규칙 판정(G4·G2·G6) → 템플릿 치환 → 저장</td><td>문장 계층은 산술 연산 금지 · 로테이션도 시드 결정</td></tr>
+      <tr><td><code>app/main.py</code></td><td>저장된 브리핑 표시, 피드백 기록</td><td>표시만(재계산 금지) · 전문용어 0 · 목업 배지</td></tr>
+    </table>
+    <div class="callout warn"><b>금지 하나로 지키는 정확성.</b> 상품명세(ITEM)와 결제(PAYMENT)는 데이터 단위가 다르다.
+    둘을 직접 조인해 금액을 합치면 영수증 1건이 여러 행으로 불어나 <b>매출이 부풀려진다</b> — 이 조인 금지는 코드 리뷰가 아니라
+    정적 검사 테스트(<code>test_mart_no_item_payment_join</code>)가 지킨다.</div>
+  </div>
+</section>
+
+<!-- ════ 4. 적재 파이프라인 시퀀스 ════ -->
+<section>
+  <div class="sec-head"><span class="sec-no">FLOW 04</span><h2>적재 파이프라인 — <code>load_period()</code> 한 번의 내부</h2></div>
+  <p class="sec-lead">일일 배치·수동 재처리·초기 구축이 전부 <b>이 함수 하나의 파라미터 차이</b>다. 코드가 하나이므로 테스트와 검증도 한 번이면 된다.</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant CLI as CLI --from --to
+  participant P as pipeline.load_period
+  participant X as Extractor(청크)
+  participant DB as SQLite
+  participant A as aggregate
+  participant B as briefing
+  CLI->>P: 기간 지정 (예: 20250701~20260731)
+  P->>DB: 기간의 FACT 3종 DELETE (날짜 단위)
+  loop 날짜별 · 청크 5만행
+    P->>X: extract_receipts / items / payments
+    X-->>P: DataFrame 청크
+    P->>DB: INSERT (실컬럼명 그대로)
+  end
+  P->>A: 기간의 마트 3종 재계산
+  A->>DB: MART_* 갱신 (취소분 자연 상계)
+  P->>B: 기간의 브리핑 재생성
+  B->>DB: BRIEFING_DAILY 저장 (3줄 + 계산 JSON)
+  P-->>CLI: LoadResult(건수·일수·소요초) + 대사 로그
+  </pre></div>
+  <div class="explain">
+    <table>
+      <tr><th style="width:70px">단계</th><th>내용</th><th style="width:320px">왜 이렇게 하는가</th></tr>
+      <tr><td>②</td><td>먼저 지우고 시작</td><td>DELETE→INSERT라 몇 번을 돌려도 결과 동일(멱등) — 데모에서 라이브로 시연하는 항목</td></tr>
+      <tr><td>③~⑤</td><td>청크 단위 스트리밍 적재</td><td>데모 데이터가 작아도 전량 메모리 적재 금지 — 대용량(연 1.2억 행)에서 터지는 코드를 처음부터 안 만든다</td></tr>
+      <tr><td>⑥~⑦</td><td>정상+취소를 함께 합산</td><td>동일자 취소 설계라 날짜 안에서 자연 상계 — 별도 상계 로직 없이 정확</td></tr>
+      <tr><td>⑧~⑨</td><td>문장 생성까지 배치에서 종료</td><td>서버측 생성 원칙 — 열람 시점에는 어떤 계산도 없다</td></tr>
+    </table>
+    <div class="callout"><b>Oracle로 갈 때 바뀌는 것.</b> 이 시퀀스에서 바뀌는 참가자는 <code>Extractor</code> 하나다.
+    SampleExtractor 자리에 OracleExtractor(파티션 SELECT·fetch size·스로틀)를 꽂으면 나머지 단계는 그대로 —
+    "재작성"이 아니라 "부품 교체"가 되도록 계약을 고정해 둔 이유다.</div>
+  </div>
+</section>
+
+<!-- ════ 5. 브리핑 결정 흐름 ════ -->
+<section>
+  <div class="sec-head"><span class="sec-no">FLOW 05</span><h2>브리핑 3줄 결정 흐름 — 무엇을 말하고, 언제 침묵하는가</h2></div>
+  <p class="sec-lead">문장의 <b>내용은 규칙(코드)이 결정</b>하고, 템플릿은 검증된 숫자를 끼워 넣을 뿐이다. 신호가 없으면 "평소대로 하시면 됩니다"라고 정직하게 침묵한다 — 침묵할 줄 아는 것이 신뢰의 조건이다.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart TD
+  j["계산 JSON<br/>(매출·증감·피크블록·건수/구매액…)<br/>반올림 완료 상태"]:::dawn --> q0{"직전 4주 동요일<br/>표본 4개 확보?"}
+  q0 -- 아니오 --> l1f["1줄(폴백): 어제 N원이었어요"]:::morn
+  q0 -- 예 --> q1{"평소 요일 대비<br/>dow_diff_pct"}
+  q1 -- "≥ +3%" --> l1a["1줄: 평소 화요일보다 12% 좋았어요 🔺"]:::morn
+  q1 -- "≤ −3%" --> l1b["1줄: 평소보다 N% 아쉬웠어요 🔻"]:::morn
+  q1 -- 그 외 --> l1c["1줄: 평소 수준이었어요"]:::morn
+  j --> q2{"G2: 최대 시간블록<br/>비중 ≥ 25%?"}
+  q2 -- 예 --> l2a["2줄: 아침(07~09시)에 매출 31% —<br/>그 전에 진열을 확인해 보세요"]:::morn
+  q2 -- 아니오 --> l2b["2줄: 평소 준비대로 충분해요"]:::morn
+  j --> q3{"G4: |전일 대비| ≥ 5%<br/>(전일 데이터 있을 때만)"}
+  q3 -- 예 --> l3a["3줄: 그저께와 비교하면<br/>손님 수(+8%) 영향이 컸어요"]:::morn
+  q3 -- 아니오 --> l3b["3줄: 특별한 신호는 없어요<br/>(G6 침묵)"]:::morn
+  l1a & l1b & l1c & l1f --> rot["템플릿 로테이션<br/>(날짜·점포 시드로 변형 선택)"]:::dawn
+  l2a & l2b --> rot
+  l3a & l3b --> rot
+  rot --> save[("BRIEFING_DAILY 저장<br/>briefing_lines 확정")]:::db
+  classDef dawn fill:#22324A,color:#DCE7F5,stroke:#22324A;
+  classDef morn fill:#FFF3DF,color:#5C430F,stroke:#E0B15E;
+  classDef db fill:#EFF4FA,color:#1C2733,stroke:#8FA6C6;
+  </pre></div>
+  <div class="explain">
+    <table>
+      <tr><th style="width:110px">줄</th><th>비교 기준</th><th>발동 임계값</th><th style="width:280px">설계 의도</th></tr>
+      <tr><td>1줄 결과</td><td>직전 4주 <b>같은 요일</b> 평균</td><td>±3% (그 사이는 "평소 수준")</td><td>요일 특성 보정 — 화요일은 화요일과 비교해야 공정</td></tr>
+      <tr><td>2줄 준비</td><td>시간대 블록(아침·점심·저녁) 비중</td><td>25%</td><td>점포별 프로파일 차등으로 매장마다 다른 문장</td></tr>
+      <tr><td>3줄 신호</td><td><b>전일(그저께와)</b> 대비 — 문장에 기준 명시</td><td>5% · 건수/구매액 중 큰 쪽이 주어</td><td>1줄과 기준이 달라 혼동되지 않게 "그저께와 비교하면"을 문장에 박음</td></tr>
+    </table>
+    <div class="callout gold"><b>환각이 원천 불가능한 이유.</b> 이 흐름에는 자유 생성이 없다 — 분기(규칙)와 치환(템플릿)뿐이다.
+    문장 속 모든 숫자가 계산 JSON에 존재함을 테스트(<code>test_briefing_lines_use_only_json_numbers</code>)가 기계적으로 검증한다.
+    로테이션조차 시드로 결정되어 재생성하면 같은 문장이 나온다.</div>
+  </div>
+</section>
+
+<!-- ════ 6. 화면 상호작용 ════ -->
+<section>
+  <div class="sec-head"><span class="sec-no">FLOW 06</span><h2>화면 상호작용 — 아침의 30초, 그 안에서 일어나는 일</h2></div>
+  <p class="sec-lead">화면 계층은 철저히 <b>소비자</b>다: 저장된 것을 읽고, 누른 것을 기록한다. 어떤 계산도, 어떤 AI 호출도 여기엔 없다.</p>
+  <div class="diagram"><pre class="mermaid">
+sequenceDiagram
+  autonumber
+  actor U as 점포장
+  participant S as Streamlit 화면
+  participant DB as SQLite
+  U->>S: 점포 선택 (기준일 기본=최신)
+  S->>DB: BRIEFING_DAILY에서 JSON 1건 읽기
+  DB-->>S: 완성된 3줄 + 계산값
+  S-->>U: 브리핑 표시 (3초 이내 · 목업 배지 · 기준일)
+  U->>S: [확인했어요] 또는 [괜찮아요]
+  S->>DB: FEEDBACK_LOG 기록
+  S-->>U: "반영했어요" 토스트
+  opt 궁금할 때만
+    U->>S: ▼ 자세히 보기
+    S->>DB: MART 조회 (매출·시간대·TOP5·14일 추이)
+    S-->>U: 차트·표 표시
+  end
+  U->>S: [보고서 내려받기]
+  S->>DB: 해당 일자 MART 조회
+  S-->>U: 일일보고_점포명_일자.xlsx
+  </pre></div>
+  <div class="explain">
+    <table>
+      <tr><th style="width:180px">상호작용</th><th>사용자 비용</th><th style="width:330px">뒤에서 하는 일</th></tr>
+      <tr><td>브리핑 보기</td><td>0터치 (첫 화면이 곧 브리핑)</td><td>JSON 1건 읽기 — 3초 목표의 이유</td></tr>
+      <tr><td>피드백</td><td>1터치 · "괜찮아요"(거절 아닌 사양의 어휘)</td><td>채택률·문구 개선의 원료 축적</td></tr>
+      <tr><td>자세히</td><td>원할 때만 1터치</td><td>이때 처음 마트 조회 — 분석은 뒤로 숨김</td></tr>
+      <tr><td>보고서</td><td>1클릭</td><td>화면과 같은 마트에서 생성 → 숫자 불일치 원천 차단</td></tr>
+      <tr><td>빈 상태</td><td>—</td><td>"이 날짜의 브리핑이 아직 없어요" 안내 (에러 노출 금지)</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ════ 7. 데이터 흐름과 정합성 ════ -->
+<section>
+  <div class="sec-head"><span class="sec-no">FLOW 07</span><h2>데이터 흐름 — 세 장의 원장과 한 장의 브리핑</h2></div>
+  <p class="sec-lead">영수증·상품명세·결제는 단위가 다른 세 장의 원장이다. 각자 따로 집계된 뒤에야 만나고, 만나는 지점마다 <b>대사(맞춰보기)</b>가 지킨다.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  subgraph FACT["원장 3종 (grain 분리)"]
+    direction TB
+    f1[("FACT_RECEIPT<br/>영수증 1건=1행<br/>ITEMCNT·TENDERCNT 보유")]:::db
+    f2[("FACT_RECEIPT_ITEM<br/>상품 1줄=1행")]:::db
+    f3[("FACT_PAYMENT<br/>결제 1건=1행")]:::db
+  end
+  subgraph CHK["일일 대사 (품질 게이트 MIN)"]
+    k1["ITEMCNT = ITEM 행수?"]:::dawn
+    k2["TENDERCNT = PAYMENT 행수?"]:::dawn
+    k3["DEALAMOUNT = Σ상품 = Σ결제?"]:::dawn
+  end
+  subgraph MART["집계 마트"]
+    m1[("일×점포")]:::db
+    m2[("시간대×점포")]:::db
+    m3[("일×점포×상품")]:::db
+  end
+  f1 --- k1 --- f2
+  f1 --- k2 --- f3
+  f1 --- k3
+  f1 --> m1
+  f1 --> m2
+  f2 --> m3
+  m1 & m2 & m3 --> br[("BRIEFING_DAILY<br/>3줄 + 근거 JSON")]:::gold
+  f2 -. "직접 조인 금액합산 ✕" .- f3
+  classDef db fill:#EFF4FA,color:#1C2733,stroke:#8FA6C6;
+  classDef dawn fill:#22324A,color:#DCE7F5,stroke:#22324A;
+  classDef gold fill:#FFF3DF,color:#5C430F,stroke:#E0B15E,stroke-width:2px;
+  </pre></div>
+  <div class="explain">
+    <div class="callout"><b>왜 원장을 세 장으로 나누는가.</b> 영수증 하나에 상품 2줄·결제 1건이 달릴 수 있다 — 한 표에 욱여넣으면
+    행이 증폭되어 합계가 틀어진다. 세 장을 분리하고 헤더의 <code>ITEMCNT·TENDERCNT</code>로 매일 행수를 맞춰보면,
+    "매출 중복 0건"이 주장이 아니라 <b>매일 실행되는 검증 결과</b>가 된다. 이 구조는 기간계 원본(TB_POD208/207/210)과 동일해서,
+    실데이터 연동 시 그대로 이어진다.</div>
+  </div>
+</section>
+
+<!-- ════ 8. 배포·발표 운영 ════ -->
+<section>
+  <div class="sec-head"><span class="sec-no">FLOW 08</span><h2>배포·발표 운영 — 다른 노트북에서, 3중 백업으로</h2></div>
+  <p class="sec-lead">발표 노트북에는 브라우저만 있으면 된다. 주력은 클라우드 URL, 그 뒤에 로컬 실행과 녹화 영상이 이중 보험으로 대기한다 — <b>"쉬운 데모"의 본질은 발표장의 가장 무서운 변수를 미리 제거하는 것</b>이다.</p>
+  <div class="diagram"><pre class="mermaid">
+flowchart LR
+  repo["GitHub 저장소<br/>코드 + 구축완료 SQLite DB 동봉"]:::dawn --> cloud["Streamlit Community Cloud<br/>https://….streamlit.app"]:::dawn
+  cloud --> lap["발표 노트북<br/>브라우저로 URL만 열기<br/>(설치 0 · 세팅 0)"]:::morn
+  cloud --> qr["QR 슬라이드 1장<br/>청중 폰에서 직접 체험<br/>(30초 체험 연출)"]:::morn
+  lap --> demo["라이브 데모 5분<br/>브리핑 → 자세히 → 보고서<br/>→ ⚙관리자 [재생성] 멱등 시연"]:::gold
+  repo -.보험 1.-> hf["제2 클라우드<br/>Hugging Face Spaces<br/>(URL 2개 체제)"]:::stub
+  demo -.보험 2.-> video["녹화 영상 + 정적 HTML 스냅샷<br/>USB 보관 (인터넷 0 의존)"]:::stub
+  hf -.주력 장애 시.-> lap
+  classDef dawn fill:#22324A,color:#DCE7F5,stroke:#22324A;
+  classDef morn fill:#FFF3DF,color:#5C430F,stroke:#E0B15E;
+  classDef gold fill:#FFF3DF,color:#5C430F,stroke:#E0B15E,stroke-width:2.5px;
+  classDef stub fill:#fff,color:#8A8577,stroke:#B8B2A4,stroke-dasharray:5 4;
+  </pre></div>
+  <div class="explain">
+    <table>
+      <tr><th style="width:110px">시점</th><th>할 일</th><th style="width:300px">이유</th></tr>
+      <tr><td>전날</td><td>발표 노트북 브라우저에서 <b>URL 2개</b> 접속 확인 · USB의 영상·스냅샷 열림 확인 (발표 노트북에 설치 0)</td><td>백업은 "검증된 백업"만 백업이다</td></tr>
+      <tr><td>30분 전</td><td>URL 2개를 각각 탭으로 열어 콜드스타트 깨우고 유지</td><td>무료 티어는 잠들어 있으면 첫 로딩이 김</td></tr>
+      <tr><td>직전</td><td>주력 탭 워밍업 · 보험1 탭 대기 · USB 꽂아둠</td><td>첫 클릭 지연 제거 · 전환 3초 내 가능</td></tr>
+      <tr><td>발표 중</td><td>주력 URL 시연 · QR로 청중 접속 유도</td><td>체험이 곧 공감이고, 공감이 곧 확산 서사</td></tr>
+    </table>
+    <div class="callout"><b>멱등을 터미널 없이 보여주는 법.</b> 발표 노트북엔 CLI가 없으므로, 앱 사이드바의
+    <code>⚙ 관리자 → [최근 7일 재생성]</code> 버튼이 <code>load_period()</code>를 그대로 호출하고
+    실행 전/후의 총매출·거래건수를 나란히 표시한다 — "몇 번을 다시 만들어도 같은 숫자"를 청중이 화면에서 직접 본다.</div>
+  </div>
+</section>
+
+<footer>
+  30초 매장 브리핑 · 업무/프로그램 흐름 도해 v1.1.1 (발표 노트북 완전 무설치 구성) — 2026-07-24 · 한재진 (코레일유통 IT)<br>
+  기준: 바이브코딩 구현 설계서 v1.3.1 · 다이어그램은 Mermaid로 렌더링됨 (인터넷 연결 환경에서 열람)
+</footer>
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad:true, theme:'base', securityLevel:'loose',
+    themeVariables:{
+      fontFamily:"'Apple SD Gothic Neo','Malgun Gothic',sans-serif", fontSize:'13.5px',
+      primaryColor:'#EFF4FA', primaryTextColor:'#1C2733', primaryBorderColor:'#8FA6C6',
+      lineColor:'#5B6672', clusterBkg:'#F7F5EF', clusterBorder:'#D8D2C6',
+      actorBkg:'#22324A', actorTextColor:'#DCE7F5', actorBorder:'#22324A',
+      signalColor:'#3C4652', signalTextColor:'#3C4652',
+      noteBkgColor:'#FFF3DF', noteTextColor:'#5C430F', noteBorderColor:'#E0B15E'
+    },
+    flowchart:{curve:'basis', htmlLabels:true, padding:10},
+    sequence:{actorMargin:36, messageMargin:34, mirrorActors:false}
+  });
+</script>
+</body>
+</html>
