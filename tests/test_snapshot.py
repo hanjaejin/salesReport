@@ -296,3 +296,32 @@ def test_cli_writes_snapshots(built_engine: Engine, tmp_path: Path, monkeypatch:
 
     assert exit_code == 0
     assert len(list(out_dir.glob("*.html"))) == 5
+
+
+# --- 부록 A.7: 자세히 장의 위험 재고 -----------------------------------------
+
+
+def test_detail_page_shows_stock_risk(pages: list[Path], built_engine: Engine) -> None:
+    """자세히 장이 위험 재고 표(또는 없다는 안내)를 담는다."""
+    from src.app import main
+
+    html = _text(next(p for p in pages if "자세히" in p.name))
+    payload = _payload(built_engine, snapshot.DETAIL_STORE)
+
+    assert "곧 떨어질 수 있는 상품" in html
+
+    items = payload["stock_risk"]["items"]
+    if items:
+        for item in items:
+            assert item["goods_nm"] in html
+        assert "남은 재고" in html
+    else:
+        assert main.NO_STOCK_RISK in html
+
+
+def test_detail_page_omits_order_quantity(pages: list[Path]) -> None:
+    """명세 7.4: 스냅샷에도 발주 수량을 제시하지 않는다."""
+    html = _text(next(p for p in pages if "자세히" in p.name))
+
+    for forbidden in ("발주", "권고", "적정재고", "리드타임"):
+        assert forbidden not in html, f"금지 표현 '{forbidden}' 이 스냅샷에 있다"

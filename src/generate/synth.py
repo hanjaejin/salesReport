@@ -680,3 +680,144 @@ def store_dim_frame() -> pd.DataFrame:
             for store in STORES
         ]
     )
+
+
+# --- 재고 스냅샷 (부록 A.3) --------------------------------------------------
+
+#: 재고 생성용 파생 시드 용도 이름. 판매와 독립된 수열을 받아,
+#: 재고 규칙을 고쳐도 이미 만들어 둔 판매 데이터가 흔들리지 않는다.
+STOCK_PURPOSE: Final[str] = "STOCK"
+
+#: 적정재고 = 매출평균수량 × 재고보유일수 (부록 A.3)
+STOCK_HOLDING_DAYS: Final[int] = 2
+
+#: 리드타임 분포 — 실측 평균 1.012 반영
+LEAD_TIMES: Final[tuple[int, ...]] = (1, 2)
+LEAD_TIME_PROBS: Final[tuple[float, ...]] = (0.85, 0.15)
+
+#: 재고가 넉넉한 상품의 적정재고 대비 비율. 하한 1.05는 의도적이다 —
+#: 소진일수(비율 × 재고보유일수)가 리드타임 최대값 2일을 항상 넘게 해,
+#: 넉넉한 상품이 위험 목록에 새어 들어가지 않게 한다.
+STOCK_NORMAL_RATIO_RANGE: Final[tuple[float, float]] = (1.05, 2.2)
+
+#: 부족한 상품의 적정재고 대비 비율
+STOCK_LOW_RATIO_RANGE: Final[tuple[float, float]] = (0.05, 0.45)
+
+#: 부족 품목이 하나도 없는 "평온한 날"의 비율.
+#: 결품은 배송 지연·주말 몰림처럼 날 단위로 뭉쳐서 일어나지 균일한 배경 잡음이 아니다.
+#: 이 값이 없으면 상품이 120종이라 매일 누군가는 부족해져 G3가 100% 발동하고,
+#: G2(시간대) 문장이 영영 나오지 않는다 (부록 A.3).
+STOCK_CALM_SHARE: Final[float] = 0.45
+
+#: 압박이 있는 날의 부족 확률 기울기
+STOCK_PRESSURE_SLOPE: Final[float] = 0.12
+
+#: 입고 예정이 잡혀 있을 확률
+INCOMING_PROB: Final[float] = 0.20
+
+
+@lru_cache(maxsize=None)
+def _daily_unit_share() -> tuple[np.ndarray, float]:
+    """상품별 하루 판매 점유율과 평균 수량을 미리 구한다 (부록 A.3).
+
+    판매 생성이 쓰는 것과 **같은 파라미터**(그룹 확률 × 그룹내 가중치 × 수량 분포)로
+    계산하므로, 만들어지는 ``SALE_AVERAGE_QTY`` 가 실제 판매량과 통계적으로 맞는다.
+
+    시간대 보정은 하루 전체로 평균하면 상쇄되므로 기본 확률만 쓴다.
+
+    Returns:
+        ``(상품별 점유율 배열, 상품 1줄당 평균 수량)``.
+    """
+    arrays = _catalog_arrays()
+    catalog = load_catalog()
+    products: list[dict[str, object]] = catalog["products"]  # type: ignore[assignment]
+
+    share = np.zeros(len(products), dtype=float)
+    for group, indexes in arrays["group_index"].items():
+        weights = arrays["group_weights"][group]
+        share[indexes] = BASE_GROUP_PROBS[group] * weights
+
+    mean_qty = float(
+        (arrays["qty_values"].astype(float) * arrays["qty_probs"]).sum()
+    )
+    return share / share.sum(), mean_qty
+
+
+def expected_daily_units(store: StoreProfile, saledate: str) -> np.ndarray:
+    """그 날 그 점포에서 상품별로 몇 개가 팔릴지 기대값을 구한다 (부록 A.3).
+
+    난수를 쓰지 않는다 — 기대값이므로 요일·계절 계수만 반영한다.
+
+    Args:
+        store: 점포 프로파일.
+        saledate: ``YYYYMMDD``.
+
+    Returns:
+        상품 순서대로의 기대 판매수량 배열.
+    """
+    share, mean_qty = _daily_unit_share()
+
+    deals = store.avg_deals * DOW_FACTORS[dow_index(saledate)] * season_factor(saledate)
+    mean_lines = float(np.dot(LINE_COUNTS, LINE_COUNT_PROBS))
+    total_units = deals * mean_lines * mean_qty
+
+    return share * total_units
+
+
+def generate_stock_snapshot(store: StoreProfile, saledate: str) -> pd.DataFrame:
+    """그 날 그 점포의 재고 스냅샷을 만든다 (부록 A.2·A.3).
+
+    수불 흐름(기초→입고→판매→기말)은 모델링하지 않는다. 씨앗의 수불 검산이
+    68%만 일치하고 음수 재고도 실재하기 때문이다 — 결품 판정에 필요한 것은
+    **기준일의 상태**이지 흐름의 이력이 아니다.
+
+    Args:
+        store: 점포 프로파일.
+        saledate: ``YYYYMMDD``.
+
+    Returns:
+        ``FACT_STOCK_SNAPSHOT`` DDL 컬럼 순서의 프레임 (상품 사전 전 품목 1행씩).
+    """
+    arrays = _catalog_arrays()
+    rng = derive_rng(store.dept_cd, saledate, STOCK_PURPOSE)
+
+    sale_average = np.round(expected_daily_units(store, saledate), 2)
+    proper = np.maximum(np.ceil(sale_average * STOCK_HOLDING_DAYS), 1).astype(np.int64)
+
+    # 그 날 그 점포의 재고 압박 정도를 먼저 뽑는다 (날 단위로 뭉치게 하는 장치).
+    pressure = float(rng.random())
+    shortage_prob = max(0.0, pressure - STOCK_CALM_SHARE) * STOCK_PRESSURE_SLOPE
+
+    is_low = rng.random(proper.size) < shortage_prob
+    ratio = np.where(
+        is_low,
+        rng.uniform(*STOCK_LOW_RATIO_RANGE, size=proper.size),
+        rng.uniform(*STOCK_NORMAL_RATIO_RANGE, size=proper.size),
+    )
+    running = np.maximum(np.round(proper * ratio), 0).astype(np.int64)
+
+    lead_time = rng.choice(LEAD_TIMES, size=proper.size, p=LEAD_TIME_PROBS).astype(np.int64)
+    has_incoming = rng.random(proper.size) < INCOMING_PROB
+    incoming = np.where(
+        has_incoming, np.ceil(sale_average * lead_time), 0
+    ).astype(np.int64)
+
+    advice = np.maximum(
+        np.ceil(proper + lead_time * sale_average - running - incoming), 0
+    ).astype(np.int64)
+
+    return pd.DataFrame(
+        {
+            "SALEDATE": saledate,
+            "DEPT_CD": store.dept_cd,
+            "PLU_CD": arrays["plu_cd"],
+            "GOODS_NM": arrays["goods_nm"],
+            "ITEM_HEAD_NM": arrays["item_head_nm"],
+            "RUNNING_STOCK_QTY": running,
+            "IPGO_QTY": incoming,
+            "SALE_AVERAGE_QTY": sale_average,
+            "PROPER_STOCK_QTY": proper,
+            "ADVICE_ORDER_QTY": advice,
+            "LEAD_TM": lead_time,
+        }
+    )

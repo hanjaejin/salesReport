@@ -80,6 +80,27 @@ FACT_PAYMENT = Table(
     PrimaryKeyConstraint("DEPT_CD", "SALEDATE", "POSNO", "DEALNO", "SEQ"),
 )
 
+#: 기준일의 재고 상태 스냅샷 (부록 A.2).
+#: 재고 6개 컬럼은 기간계 TB_SBL202(매장 발주 기초데이터)의 실컬럼명을 그대로 쓴다.
+#: 키 3개는 명세 4장이 확정한 이름을 따른다 — 다른 FACT·MART와 기간 조건을 통일하기 위해서다.
+FACT_STOCK_SNAPSHOT = Table(
+    "FACT_STOCK_SNAPSHOT",
+    metadata,
+    Column("SALEDATE", Text, nullable=False),
+    Column("DEPT_CD", Text, nullable=False),
+    Column("PLU_CD", Text, nullable=False),
+    Column("GOODS_NM", Text, nullable=False),
+    Column("ITEM_HEAD_NM", Text, nullable=False),
+    Column("RUNNING_STOCK_QTY", Integer, nullable=False),  # 운영재고수량
+    Column("IPGO_QTY", Integer, nullable=False),  # 입고예정수량
+    Column("SALE_AVERAGE_QTY", Float, nullable=False),  # 매출평균수량(1일)
+    Column("PROPER_STOCK_QTY", Integer, nullable=False),  # 적정재고수량
+    Column("ADVICE_ORDER_QTY", Integer, nullable=False),  # 권고발주수량 — 표시 금지(부록 A.5)
+    Column("LEAD_TM", Integer, nullable=False),  # 리드타임(일)
+    PrimaryKeyConstraint("SALEDATE", "DEPT_CD", "PLU_CD"),
+)
+
+
 # --- 차원 -----------------------------------------------------------------
 
 #: 점포 마스터 (명세 6.1 · ADR-0003).

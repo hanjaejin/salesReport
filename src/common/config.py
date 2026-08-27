@@ -123,7 +123,7 @@ def is_sqlite(engine: Engine) -> bool:
     return engine.dialect.name == "sqlite"
 
 
-def derive_seed(dept_cd: str, saledate: str) -> int:
+def derive_seed(dept_cd: str, saledate: str, purpose: str = "") -> int:
     """(기본 시드, 점포, 날짜)에서 그 날·그 점포 전용 시드를 만든다 (명세 3장 · 불변식 4).
 
     명세는 이 규칙을 ``hash((20260723, DEPT_CD, SALEDATE))`` 로 적었지만,
@@ -135,16 +135,21 @@ def derive_seed(dept_cd: str, saledate: str) -> int:
     Args:
         dept_cd: 점포코드.
         saledate: ``YYYYMMDD`` 매출일자.
+        purpose: 용도 이름. 같은 (점포, 날짜)라도 용도가 다르면 독립된 수열을 준다.
+            재고 생성 규칙을 고쳐도 기존 판매 데이터가 흔들리지 않게 하는 장치다 (부록 A.3).
 
     Returns:
         0 이상 2**63 미만의 결정적 정수 시드.
     """
-    payload = f"{BASE_SEED}|{dept_cd}|{saledate}".encode("utf-8")
+    # purpose가 비면 접미를 붙이지 않는다 — 이미 구축·검증한 판매 데이터의 시드를
+    # 그대로 보존하기 위해서다. 새 용도만 독립 수열을 받는다.
+    suffix = f"|{purpose}" if purpose else ""
+    payload = f"{BASE_SEED}|{dept_cd}|{saledate}{suffix}".encode("utf-8")
     digest = hashlib.blake2b(payload, digest_size=8).digest()
     return int.from_bytes(digest, byteorder="big", signed=False) >> 1
 
 
-def derive_rng(dept_cd: str, saledate: str) -> np.random.Generator:
+def derive_rng(dept_cd: str, saledate: str, purpose: str = "") -> np.random.Generator:
     """(점포, 날짜) 전용 독립 난수 생성기를 만든다 (불변식 4).
 
     전역 순차 난수를 쓰면 앞선 날짜의 소비량이 뒤 날짜 결과를 바꿔
@@ -153,8 +158,9 @@ def derive_rng(dept_cd: str, saledate: str) -> np.random.Generator:
     Args:
         dept_cd: 점포코드.
         saledate: ``YYYYMMDD`` 매출일자.
+        purpose: 용도 이름 (예: ``"STOCK"``). 생략하면 판매 생성용 기본 수열.
 
     Returns:
-        해당 날짜·점포에 대해 항상 같은 수열을 내는 ``numpy`` 생성기.
+        해당 날짜·점포·용도에 대해 항상 같은 수열을 내는 ``numpy`` 생성기.
     """
-    return np.random.default_rng(derive_seed(dept_cd, saledate))
+    return np.random.default_rng(derive_seed(dept_cd, saledate, purpose))

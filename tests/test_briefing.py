@@ -502,12 +502,26 @@ def test_stores_produce_different_briefings(built_engine: Engine) -> None:
     assert len(set(lines.values())) == 3, f"같은 브리핑이 나온 점포가 있다: {lines}"
 
 
-def test_store_l_fires_morning_g2(built_engine: Engine) -> None:
-    """명세 12장: L 점포는 아침 블록으로 G2가 발동한다."""
+def test_store_l_peak_block_is_morning(built_engine: Engine) -> None:
+    """명세 12장: L 점포의 최대 시간 블록은 아침이다 (프로파일 차등의 결과).
+
+    부록 A 도입 후 2줄은 G3(결품)와 G2(시간대)가 나눠 갖는다. G3가 우선하므로
+    "L은 항상 G2"는 더 이상 참이 아니다 — 최대 블록이 아침이라는 사실은 그대로다.
+    """
     payload = _payload(built_engine, TO_DATE, "901001")
 
     assert payload["peak_block"]["name"] == "아침"
-    assert "G2" in {card["card_id"] for card in payload["cards"]}
+    assert payload["peak_block"]["share_pct"] >= G2_THRESHOLD_PCT
+
+
+def test_line2_is_owned_by_g3_or_g2(built_engine: Engine) -> None:
+    """2줄은 G3 또는 G2 하나가 차지한다 — 둘이 동시에 카드에 들어가지 않는다 (부록 A.4)."""
+    for dept_cd in ("901001", "901002", "901003"):
+        payload = _payload(built_engine, TO_DATE, dept_cd)
+        card_ids = {card["card_id"] for card in payload["cards"]}
+
+        assert not ({"G3", "G2"} <= card_ids), f"[{dept_cd}] G3와 G2가 함께 있다"
+        assert len(payload["cards"]) <= 2
 
 
 def test_store_m_fires_lunch_g2(built_engine: Engine) -> None:

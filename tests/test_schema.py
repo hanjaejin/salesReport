@@ -39,6 +39,14 @@ EXPECTED_TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ),
         ("DEPT_CD", "SALEDATE", "POSNO", "DEALNO", "SEQ"),
     ),
+    "FACT_STOCK_SNAPSHOT": (
+        (
+            "SALEDATE", "DEPT_CD", "PLU_CD", "GOODS_NM", "ITEM_HEAD_NM",
+            "RUNNING_STOCK_QTY", "IPGO_QTY", "SALE_AVERAGE_QTY",
+            "PROPER_STOCK_QTY", "ADVICE_ORDER_QTY", "LEAD_TM",
+        ),
+        ("SALEDATE", "DEPT_CD", "PLU_CD"),
+    ),
     "DIM_STORE": (
         ("DEPT_CD", "DEPT_NM", "SIZE_GRADE"),
         ("DEPT_CD",),

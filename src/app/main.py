@@ -32,6 +32,7 @@ MOCKUP_BADGE = "🧪 목업 데이터"
 EMPTY_STATE = "이 날짜의 브리핑이 아직 없어요. 다른 날짜를 선택해 주세요"
 FOOTER_NOTE = "본 화면의 수치는 운영 참고용입니다. 정산·회계 기준이 아닙니다."
 REPORT_READY = "오늘의 일일 보고가 준비되어 있어요."
+NO_STOCK_RISK = "지금은 부족한 상품이 없어요"
 FEEDBACK_TOAST = "반영했어요"
 
 #: 피드백 버튼 (명세 9장) — "괜찮아요"는 거절이 아니라 사양의 어휘다
@@ -344,6 +345,23 @@ def _detail_section(engine: Engine, payload: dict[str, Any]) -> None:
             st.dataframe(top5, hide_index=True, width="stretch")
         else:
             st.write("이 날짜에는 판매 기록이 없어요")
+
+        st.markdown("#### 곧 떨어질 수 있는 상품")
+        risk_items = payload.get("stock_risk", {}).get("items", [])
+        if risk_items:
+            st.dataframe(
+                pd.DataFrame(risk_items)[["goods_nm", "stock_qty", "sale_average_qty"]].rename(
+                    columns={
+                        "goods_nm": "상품",
+                        "stock_qty": "남은 재고",
+                        "sale_average_qty": "하루 평균 판매",
+                    }
+                ),
+                hide_index=True,
+                width="stretch",
+            )
+        else:
+            st.write(NO_STOCK_RISK)
 
         st.markdown(f"#### 최근 {TREND_DAYS}일 흐름")
         trend = load_trend(engine, payload["saledate"], payload["dept_cd"])

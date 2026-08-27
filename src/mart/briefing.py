@@ -14,6 +14,7 @@ import json
 from collections.abc import Sequence
 from typing import Any
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import Engine, delete, select
 
@@ -56,6 +57,15 @@ LINE2_TEMPLATES: dict[str, str] = {
     "silent_1": "특별한 준비 없이 평소처럼 하시면 돼요",
 }
 
+#: 2줄 G3(결품) 발동형 — 부록 A.5. 기존 2줄 문자열은 건드리지 않는다.
+#: 조사 문제를 피하려고 "{goods_nm} 재고가" / "{goods_nm}부터" 형태를 쓴다.
+LINE2_STOCK_TEMPLATES: dict[str, str] = {
+    "single_0": "{goods_nm} 재고가 얼마 남지 않았어요 — 오늘 채워 두는 게 좋아요",
+    "multi_0": "{goods_nm} 외 {other_count}개 상품의 재고가 얼마 남지 않았어요 — 오늘 채워 두는 게 좋아요",
+    "single_1": "재고가 얼마 남지 않은 상품이 있어요 — {goods_nm}부터 확인해 보세요",
+    "multi_1": "재고가 얼마 남지 않은 상품이 {risk_count}개 있어요 — {goods_nm}부터 확인해 보세요",
+}
+
 #: 3줄은 정확성 우선으로 단일 문형을 유지한다 (명세 7.4).
 #: ``{support_particle}`` 은 명세의 고정 조사 "는"을 대신한다 — 보조어가
 #: "1인당 구매액"일 때 "구매액는"이라는 비문이 화면에 나오기 때문이다 (ADR-0007 결정 3).
@@ -70,6 +80,12 @@ SIGNAL_LABELS: dict[str, str] = {"cnt": "손님 수", "ticket": "1인당 구매�
 
 #: 받침 유무에 따른 주격 보조사 (ADR-0007 결정 3).
 SIGNAL_PARTICLES: dict[str, str] = {"cnt": "는", "ticket": "은"}
+
+#: 위험 품목 하한 — 하루 1개도 안 나가는 꼬리 상품은 제외한다 (부록 A.4).
+MIN_SALE_AVERAGE_FOR_RISK: float = 1.0
+
+#: 자세히 화면에 보여 줄 위험 품목 수 (부록 A.6).
+STOCK_RISK_LIST_SIZE: int = 5
 
 
 # --- 명세 7.3 카드 판정 -----------------------------------------------------
@@ -101,6 +117,80 @@ def g2_fires(peak_share_pct: float | None) -> bool:
     if peak_share_pct is None:
         return False
     return peak_share_pct >= G2_THRESHOLD_PCT
+
+
+def g3_fires(risk_count: int) -> bool:
+    """G3(결품) 카드 발동 여부 (부록 A.4: 위험 품목 >= 1개).
+
+    Args:
+        risk_count: 위험 품목 수.
+
+    Returns:
+        발동하면 True.
+    """
+    return risk_count >= 1
+
+
+def find_stock_risk(stock: pd.DataFrame) -> dict[str, Any]:
+    """재고 스냅샷에서 위험 품목을 골라 계산 JSON 조각을 만든다 (부록 A.4·A.6).
+
+    위험 판정은 두 조건을 모두 만족할 때다::
+
+        소진일수 = (운영재고 + 입고예정) / 매출평균수량  <= 리드타임
+        매출평균수량 >= 1.0
+
+    두 번째 조건이 없으면 하루 1개도 안 나가는 꼬리 상품이 매일 목록을 채워
+    신호가 무의미해진다.
+
+    반올림과 정렬을 **여기서** 끝낸다 — 문장 계층은 치환만 한다 (불변식 1).
+
+    Args:
+        stock: 그 날 그 점포의 ``FACT_STOCK_SNAPSHOT`` 프레임.
+
+    Returns:
+        ``risk_count``·``other_count``·``top``·``items`` 를 담은 딕셔너리.
+    """
+    empty: dict[str, Any] = {"risk_count": 0, "other_count": 0, "top": None, "items": []}
+    if stock.empty:
+        return empty
+
+    average = stock["SALE_AVERAGE_QTY"].to_numpy(dtype=float)
+    available = (stock["RUNNING_STOCK_QTY"] + stock["IPGO_QTY"]).to_numpy(dtype=float)
+
+    # 하루 판매가 0이면 영원히 안 떨어지는 셈이라 위험이 아니다 (0 나눗셈 방어).
+    days_left = np.divide(
+        available, average, out=np.full(average.shape, np.inf), where=average > 0
+    )
+    is_risk = (days_left <= stock["LEAD_TM"].to_numpy(dtype=float)) & (
+        average >= MIN_SALE_AVERAGE_FOR_RISK
+    )
+    if not is_risk.any():
+        return empty
+
+    risky = (
+        stock.loc[is_risk]
+        .assign(DAYS_LEFT=np.round(days_left[is_risk], 1))
+        .sort_values(["DAYS_LEFT", "SALE_AVERAGE_QTY"], ascending=[True, False])
+    )
+
+    items = [
+        {
+            "goods_nm": row.GOODS_NM,
+            "stock_qty": int(row.RUNNING_STOCK_QTY),
+            "incoming_qty": int(row.IPGO_QTY),
+            "sale_average_qty": float(row.SALE_AVERAGE_QTY),
+            "days_left": float(row.DAYS_LEFT),
+        }
+        for row in risky.head(STOCK_RISK_LIST_SIZE).itertuples(index=False)
+    ]
+    risk_count = int(is_risk.sum())
+
+    return {
+        "risk_count": risk_count,
+        "other_count": risk_count - 1,
+        "top": items[0],
+        "items": items,
+    }
 
 
 def pick_signal(cnt_diff_pct: float | None, ticket_diff_pct: float | None) -> dict[str, Any]:
@@ -137,24 +227,45 @@ def build_cards(
     peak_share_pct: float | None,
     signal: dict[str, Any] | None,
     block: dict[str, Any] | None,
+    stock_risk: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """발동 카드 목록을 만든다 (명세 7.3: 최대 2개, 없으면 G6 1개).
+    """발동 카드 목록을 만든다 (명세 7.3 · 부록 A.4).
+
+    카드는 최대 2개다 — 3줄을 차지하는 G4 하나와, 2줄을 차지하는 G3/G2 중 하나.
+    **G3가 G2보다 우선한다**: 둘 다 "오늘 준비"를 말하는데 물건이 떨어지는 일이
+    진열 시점보다 급하기 때문이다. 없으면 G6 1개.
 
     Args:
         prev_diff_pct: 전일 대비 증감률.
         peak_share_pct: 최대 시간 블록 비중.
         signal: G4 카드의 치환값 (``pick_signal`` 결과).
         block: G2 카드의 치환값 (``block_name``·``block_range``·``share_pct``).
+        stock_risk: G3 카드의 치환값 (``find_stock_risk`` 결과). None이면 재고 미사용.
 
     Returns:
-        우선순위 순(G4 → G2) 카드 리스트.
+        우선순위 순(G4 → G3/G2) 카드 리스트.
     """
     cards: list[dict[str, Any]] = []
 
     if g4_fires(prev_diff_pct):
         cards.append({"card_id": "G4", "lines": dict(signal) if signal else {}})
-    if g2_fires(peak_share_pct):
+
+    risk_count = int(stock_risk["risk_count"]) if stock_risk else 0
+    if g3_fires(risk_count):
+        top = stock_risk["top"] if stock_risk else {}
+        cards.append(
+            {
+                "card_id": "G3",
+                "lines": {
+                    "goods_nm": top["goods_nm"] if top else "",
+                    "risk_count": risk_count,
+                    "other_count": int(stock_risk["other_count"]) if stock_risk else 0,
+                },
+            }
+        )
+    elif g2_fires(peak_share_pct):
         cards.append({"card_id": "G2", "lines": dict(block) if block else {}})
+
     if not cards:
         cards.append({"card_id": "G6", "lines": {}})
 
@@ -216,10 +327,10 @@ def render_line1(payload: dict[str, Any], variant: int) -> str:
 
 
 def render_line2(card: dict[str, Any] | None, variant: int) -> str:
-    """2줄(준비)을 만든다 — 명세 7.4.
+    """2줄(준비)을 만든다 — 명세 7.4 · 부록 A.5.
 
     Args:
-        card: G2 카드. 미발동이면 None.
+        card: 2줄을 차지하는 카드 (``G3`` 또는 ``G2``). 미발동이면 None.
         variant: 0(변형 A) 또는 1(변형 B).
 
     Returns:
@@ -227,6 +338,11 @@ def render_line2(card: dict[str, Any] | None, variant: int) -> str:
     """
     if card is None:
         return LINE2_TEMPLATES[f"silent_{variant}"]
+
+    if card["card_id"] == "G3":
+        shape = "single" if card["lines"]["risk_count"] == 1 else "multi"
+        return LINE2_STOCK_TEMPLATES[f"{shape}_{variant}"].format(**card["lines"])
+
     return LINE2_TEMPLATES[f"g2_{variant}"].format(**card["lines"])
 
 
@@ -287,7 +403,7 @@ def _peak_block(hourly_amounts: dict[str, int], sale_amt: int) -> dict[str, Any]
 
 def _load_marts(
     engine: Engine, from_date: str, to_date: str, dept_cds: Sequence[str] | None
-) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, str]]:
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, str]]:
     """브리핑에 필요한 마트를 한 번에 읽는다.
 
     요일 기준선(직전 4주)과 전일 비교 때문에 시작일보다 앞선 구간까지 읽는다.
@@ -299,7 +415,7 @@ def _load_marts(
         dept_cds: 대상 점포코드. None이면 전 점포.
 
     Returns:
-        ``(일 마트, 시간대 마트, 상품 마트, 점포명 매핑)``.
+        ``(일 마트, 시간대 마트, 상품 마트, 재고 스냅샷, 점포명 매핑)``.
     """
     lookback_from = shift_days(from_date, 0 - (7 * DOW_BASELINE_WEEKS))
 
@@ -325,10 +441,16 @@ def _load_marts(
             ),
             connection,
         )
+        stock = pd.read_sql(
+            scoped(
+                select(schema.FACT_STOCK_SNAPSHOT), schema.FACT_STOCK_SNAPSHOT, from_date
+            ),
+            connection,
+        )
         stores = pd.read_sql(select(schema.DIM_STORE), connection)
 
     names = dict(zip(stores["DEPT_CD"], stores["DEPT_NM"], strict=True))
-    return days, hours, items, names
+    return days, hours, items, stock, names
 
 
 def build_payload(
@@ -340,6 +462,7 @@ def build_payload(
     dow_rows: pd.DataFrame,
     hourly_amounts: dict[str, int],
     top_items: pd.DataFrame,
+    stock: pd.DataFrame | None = None,
 ) -> dict[str, Any]:
     """하루치 계산 JSON을 만든다 (명세 7.2 스키마 · ADR-0007 보강).
 
@@ -355,6 +478,7 @@ def build_payload(
         dow_rows: 직전 4주 동일 요일의 ``MART_DAY_STORE`` 행들.
         hourly_amounts: 시각(``HH``) → 매출액.
         top_items: 매출 상위 상품 (최대 5행).
+        stock: 그 날의 재고 스냅샷 (부록 A). None이면 결품 판정을 건너뛴다.
 
     Returns:
         ``BRIEFING_DAILY.PAYLOAD_JSON`` 에 저장할 딕셔너리.
@@ -382,7 +506,10 @@ def build_payload(
         "block_range": peak_block["range"],
         "share_pct": peak_block["share_pct"],
     }
-    cards = build_cards(prev_diff_pct, peak_block["share_pct"], signal, block_lines)
+    stock_risk = find_stock_risk(stock if stock is not None else pd.DataFrame())
+    cards = build_cards(
+        prev_diff_pct, peak_block["share_pct"], signal, block_lines, stock_risk
+    )
 
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
@@ -414,6 +541,7 @@ def build_payload(
         "hourly": [
             {"hour": hour, "sale_amt": int(hourly_amounts.get(hour, 0))} for hour in HOURS
         ],
+        "stock_risk": stock_risk,
         "cards": cards,
     }
 
@@ -421,7 +549,7 @@ def build_payload(
     payload["template_variant"] = variant
     payload["briefing_lines"] = [
         render_line1(payload, variant),
-        render_line2(find_card(cards, "G2"), variant),
+        render_line2(find_card(cards, "G3") or find_card(cards, "G2"), variant),
         render_line3(find_card(cards, "G4")),
     ]
     return payload
@@ -443,7 +571,7 @@ def build_briefings(
     Returns:
         생성한 브리핑 수.
     """
-    days, hours, items, names = _load_marts(engine, from_date, to_date, dept_cds)
+    days, hours, items, stock, names = _load_marts(engine, from_date, to_date, dept_cds)
     if days.empty:
         logger.warning("브리핑 생성 대상이 없습니다: %s ~ %s", from_date, to_date)
         return 0
@@ -451,6 +579,7 @@ def build_briefings(
     day_index = days.set_index(["DEPT_CD", "SALEDATE"]).sort_index()
     hour_groups = {key: group for key, group in hours.groupby(["DEPT_CD", "SALEDATE"])}
     item_groups = {key: group for key, group in items.groupby(["DEPT_CD", "SALEDATE"])}
+    stock_groups = {key: group for key, group in stock.groupby(["DEPT_CD", "SALEDATE"])}
 
     records: list[dict[str, object]] = []
     for saledate in date_range(from_date, to_date):
@@ -492,6 +621,7 @@ def build_briefings(
                 dow_rows=dow_rows,
                 hourly_amounts=hourly_amounts,
                 top_items=top_items,
+                stock=stock_groups.get((dept_cd, saledate)),
             )
             records.append(
                 {

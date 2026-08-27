@@ -86,6 +86,39 @@ class SampleExtractor(ReceiptExtractor):
 
     # --- 부가 ------------------------------------------------------------
 
+    def extract_stock(self, from_date: str, to_date: str) -> Iterator[pd.DataFrame]:
+        """기간의 재고 스냅샷을 청크로 흘린다 (부록 A.2).
+
+        계약(``ReceiptExtractor``)에 없는 부가 메서드다. Oracle 연동 시 재고는
+        ``TB_SBL202``(매장 발주 기초데이터)에서 오므로 영수증과 원천이 다르다.
+
+        Args:
+            from_date: 시작일 ``YYYYMMDD`` (포함).
+            to_date: 종료일 ``YYYYMMDD`` (포함).
+
+        Yields:
+            ``FACT_STOCK_SNAPSHOT`` 컬럼을 가진 DataFrame 청크.
+        """
+        stores = self._target_stores()
+        buffer: list[pd.DataFrame] = []
+        buffered_rows = 0
+
+        for saledate in date_range(from_date, to_date):
+            for store in stores:
+                frame = synth.generate_stock_snapshot(store, saledate)
+                buffer.append(frame)
+                buffered_rows += len(frame)
+
+                while buffered_rows >= self._chunk_size:
+                    merged = pd.concat(buffer, ignore_index=True)
+                    yield merged.iloc[: self._chunk_size].reset_index(drop=True)
+                    leftover = merged.iloc[self._chunk_size :].reset_index(drop=True)
+                    buffer = [leftover] if not leftover.empty else []
+                    buffered_rows = len(leftover)
+
+        if buffer:
+            yield pd.concat(buffer, ignore_index=True)
+
     def extract_stores(self) -> pd.DataFrame:
         """점포 마스터를 돌려준다 (``DIM_STORE`` 적재용).
 

@@ -64,6 +64,7 @@ def test_report_xlsx_created(built_engine: Engine, tmp_path: Path) -> None:
         daily_report.SHEET_SUMMARY,
         daily_report.SHEET_TOP5,
         daily_report.SHEET_HOURLY,
+        daily_report.SHEET_STOCK,
     ]
 
 
@@ -157,7 +158,7 @@ def test_report_bytes_is_valid_workbook(built_engine: Engine) -> None:
 
     assert payload[:2] == b"PK", "xlsx(zip) 시그니처가 아니다"
     workbook = load_workbook(io.BytesIO(payload))
-    assert len(workbook.sheetnames) == 3
+    assert len(workbook.sheetnames) == 4
 
 
 def test_missing_day_raises_lookup_error(built_engine: Engine, tmp_path: Path) -> None:
@@ -193,3 +194,37 @@ def test_report_uses_no_jargon(built_engine: Engine, tmp_path: Path) -> None:
 
     for word in ("객단가", "증감률", "AI", "LLM"):
         assert word not in texts, f"금지 용어 '{word}' 가 보고서에 있다"
+
+
+# --- 부록 A.7: 재고 시트 -----------------------------------------------------
+
+
+def test_stock_sheet_matches_briefing(built_engine: Engine, tmp_path: Path) -> None:
+    """재고 시트가 브리핑의 위험 품목과 일치한다."""
+    payload = _payload(built_engine, SALEDATE, DEPT_CD)
+    path = daily_report.write_daily_report(built_engine, SALEDATE, DEPT_CD, tmp_path)
+
+    sheet = load_workbook(path)[daily_report.SHEET_STOCK]
+    rows = [r for r in sheet.iter_rows(min_row=2, values_only=True) if r[0]]
+    items = payload["stock_risk"]["items"]
+
+    if items:
+        assert [r[0] for r in rows] == [item["goods_nm"] for item in items]
+        assert [r[1] for r in rows] == [item["stock_qty"] for item in items]
+    else:
+        assert rows[0][0] == "지금은 부족한 상품이 없어요"
+
+
+def test_stock_sheet_omits_order_quantity(built_engine: Engine, tmp_path: Path) -> None:
+    """명세 7.4: 보고서에도 발주 수량을 제시하지 않는다."""
+    path = daily_report.write_daily_report(built_engine, SALEDATE, DEPT_CD, tmp_path)
+
+    sheet = load_workbook(path)[daily_report.SHEET_STOCK]
+    headers = next(sheet.iter_rows(values_only=True))
+
+    assert headers == ("상품", "남은 재고", "하루 평균 판매")
+    texts = " ".join(
+        str(c) for row in sheet.iter_rows(values_only=True) for c in row if isinstance(c, str)
+    )
+    for forbidden in ("발주", "권고", "적정재고", "리드타임"):
+        assert forbidden not in texts

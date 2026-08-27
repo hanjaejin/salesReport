@@ -9,7 +9,7 @@ CDN도, 그림 파일도, 폰트 다운로드도 없다. 차트는 인라인 SVG
 ``BRIEFING_DAILY`` 의 글자 그대로이고, 수치는 마트에서 읽은 그대로다 (불변식 1·7).
 
 실행:
-    python -m src.report.snapshot --date 20260703
+    python -m src.report.snapshot --date 20260609
 """
 
 from __future__ import annotations
@@ -22,7 +22,14 @@ from pathlib import Path
 import pandas as pd
 from sqlalchemy import Engine, select
 
-from src.app.main import FOOTER_NOTE, MOCKUP_BADGE, TREND_DAYS, arrow_text, format_display_date
+from src.app.main import (
+    FOOTER_NOTE,
+    MOCKUP_BADGE,
+    NO_STOCK_RISK,
+    TREND_DAYS,
+    arrow_text,
+    format_display_date,
+)
 from src.common.config import DATA_DIR, get_engine
 from src.common.dateutil import shift_days
 from src.common.logger import get_logger
@@ -366,6 +373,12 @@ def render_detail_page(payload: dict, trend: pd.DataFrame) -> str:
         f'<td class="num">{item["qty"]:,}개</td></tr>'
         for rank, item in enumerate(payload["top5"], start=1)
     )
+    risk_rows = "".join(
+        f"<tr><td>{_esc(item['goods_nm'])}</td>"
+        f'<td class="num">{item["stock_qty"]:,}개</td>'
+        f'<td class="num">{item["sale_average_qty"]}개</td></tr>'
+        for item in payload.get("stock_risk", {}).get("items", [])
+    )
 
     body = (
         "<h2>자세히 보기</h2>"
@@ -379,7 +392,14 @@ def render_detail_page(payload: dict, trend: pd.DataFrame) -> str:
         + "<h3>많이 팔린 상품</h3>"
         '<table><tr><th>순위</th><th>상품</th><th class="num">매출</th>'
         f'<th class="num">판매수량</th></tr>{top_rows}</table>'
-        f"<h3>최근 {TREND_DAYS}일 흐름</h3>"
+        + "<h3>곧 떨어질 수 있는 상품</h3>"
+        + (
+            '<table><tr><th>상품</th><th class="num">남은 재고</th>'
+            f'<th class="num">하루 평균 판매</th></tr>{risk_rows}</table>'
+            if risk_rows
+            else f'<p class="note">{NO_STOCK_RISK}</p>'
+        )
+        + f"<h3>최근 {TREND_DAYS}일 흐름</h3>"
         + line_chart_svg(trend["SALEDATE"].tolist(), trend["SALE_AMT"].tolist())
     )
     return _page(

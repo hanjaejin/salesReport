@@ -113,7 +113,12 @@ def _delete_period(
         dates: 삭제할 날짜 목록.
         dept_cds: 대상 점포코드. None이면 전 점포.
     """
-    tables = (schema.FACT_RECEIPT, schema.FACT_RECEIPT_ITEM, schema.FACT_PAYMENT)
+    tables = (
+        schema.FACT_RECEIPT,
+        schema.FACT_RECEIPT_ITEM,
+        schema.FACT_PAYMENT,
+        schema.FACT_STOCK_SNAPSHOT,
+    )
 
     with engine.begin() as connection:
         for table in tables:
@@ -315,6 +320,14 @@ def load_period(
     payments = _insert_chunks(
         engine, schema.FACT_PAYMENT, extractor.extract_payments(from_date, to_date), "결제"
     )
+
+    # 재고 스냅샷은 계약 밖 선택 메서드다 (Oracle에서는 TB_SBL202로 원천이 다르다 — 부록 A.2)
+    extract_stock = getattr(extractor, "extract_stock", None)
+    if extract_stock is not None:
+        stock_rows = _insert_chunks(
+            engine, schema.FACT_STOCK_SNAPSHOT, extract_stock(from_date, to_date), "재고"
+        )
+        logger.info("재고 스냅샷 %s행 적재", f"{stock_rows:,}")
 
     _log_reconciliation(reconcile(engine, from_date, to_date))
 

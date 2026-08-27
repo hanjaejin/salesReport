@@ -30,6 +30,7 @@ logger = get_logger(__name__)
 SHEET_SUMMARY = "요약"
 SHEET_TOP5 = "TOP5"
 SHEET_HOURLY = "시간대"
+SHEET_STOCK = "재고"
 
 #: 머리글 스타일
 _HEADER_FILL = PatternFill("solid", fgColor="22324A")
@@ -203,6 +204,27 @@ def _write_hourly(sheet: Worksheet, hourly: pd.DataFrame) -> None:
     _autosize(sheet, {1: 12, 2: 16, 3: 10})
 
 
+def _write_stock(sheet: Worksheet, payload: dict) -> None:
+    """재고 시트를 쓴다 — 곧 떨어질 수 있는 상품 (부록 A.7).
+
+    **권고발주수량은 넣지 않는다.** 본 명세 7.4가 발주 수량 제시를 금지한다.
+
+    Args:
+        sheet: 대상 시트.
+        payload: 계산 JSON.
+    """
+    sheet.append(["상품", "남은 재고", "하루 평균 판매"])
+    _style_header(sheet, 1, 3)
+
+    items = payload.get("stock_risk", {}).get("items", [])
+    if not items:
+        sheet.append(["지금은 부족한 상품이 없어요", "", ""])
+    for item in items:
+        sheet.append([item["goods_nm"], item["stock_qty"], item["sale_average_qty"]])
+
+    _autosize(sheet, {1: 34, 2: 12, 3: 14})
+
+
 def build_workbook(engine: Engine, saledate: str, dept_cd: str) -> Workbook:
     """일일 보고서 워크북을 만든다 (명세 9장).
 
@@ -226,6 +248,7 @@ def build_workbook(engine: Engine, saledate: str, dept_cd: str) -> Workbook:
     _write_summary(summary, payload)
     _write_top5(workbook.create_sheet(SHEET_TOP5), top_items)
     _write_hourly(workbook.create_sheet(SHEET_HOURLY), hourly)
+    _write_stock(workbook.create_sheet(SHEET_STOCK), payload)
 
     return workbook
 
