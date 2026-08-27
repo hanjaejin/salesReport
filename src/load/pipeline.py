@@ -342,6 +342,36 @@ def load_period(
 # --- CLI -------------------------------------------------------------------
 
 
+def slim_for_deploy(engine: Engine) -> None:
+    """배포용으로 원장(FACT 3종)을 비우고 파일을 줄인다 (ADR-0009).
+
+    화면이 읽는 것은 마트와 브리핑뿐이다. 원장은 마트를 만드는 재료이며,
+    파생 시드가 결정적이라 같은 명령을 ``--deploy`` 없이 돌리면 그대로 복원된다.
+
+    **구축을 마친 뒤 마지막에** 호출해야 한다. 원장이 빈 상태에서 마트를 다시 만들면
+    마트가 비어 버린다.
+
+    Args:
+        engine: 대상 엔진.
+    """
+    from sqlalchemy import text
+
+    tables = (schema.FACT_RECEIPT, schema.FACT_RECEIPT_ITEM, schema.FACT_PAYMENT)
+
+    with engine.begin() as connection:
+        for table in tables:
+            connection.execute(delete(table))
+
+    # VACUUM은 트랜잭션 밖에서만 실행할 수 있다.
+    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+        connection.execute(text("VACUUM"))
+
+    logger.info(
+        "배포용 정리 완료: 원장 3종을 비웠습니다. "
+        "화면이 읽는 마트·브리핑은 그대로입니다 (복원: 같은 명령을 --deploy 없이 재실행)."
+    )
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """CLI 인자를 파싱한다 (명세 8장 형식).
 
@@ -366,6 +396,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--db", default=None, help=f"SQLite 파일 경로 (기본: {DB_PATH})"
     )
+    parser.add_argument(
+        "--deploy",
+        action="store_true",
+        help="구축 후 원장(FACT)을 비워 배포용으로 줄인다. 마지막에만 쓸 것 (ADR-0009)",
+    )
     return parser.parse_args(argv)
 
 
@@ -387,6 +422,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         load_period(
             SampleExtractor(dept_cds=args.stores), args.from_date, args.to_date, engine=engine
         )
+        if args.deploy:
+            slim_for_deploy(engine)
     except ValueError as error:
         logger.error("적재 실패: %s", error)
         return 2

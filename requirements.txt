@@ -5,7 +5,8 @@
 pandas>=2.2
 numpy>=1.26
 SQLAlchemy>=2.0
-streamlit>=1.40
+# width="stretch" 파라미터가 들어온 버전 이상이어야 한다 (ADR-0009)
+streamlit>=1.49
 openpyxl>=3.1
 
 # 개발·검증용 (배포에도 남겨 둔다 — 클라우드에서 pytest를 돌려 볼 수 있게)

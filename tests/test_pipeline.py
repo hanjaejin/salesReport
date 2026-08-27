@@ -328,3 +328,79 @@ def test_cli_rejects_bad_date(tmp_path: Path) -> None:
     )
 
     assert exit_code != 0
+
+
+# --- 배포용 슬림화 (ADR-0009) ----------------------------------------------
+
+
+def test_slim_for_deploy_empties_facts_but_keeps_read_model(tmp_path: Path) -> None:
+    """ADR-0009: 원장은 비우고 화면이 읽는 마트·브리핑은 남긴다."""
+    from src.mart import briefing
+
+    engine = get_engine(tmp_path / "deploy.db")
+    pipeline.load_period(SampleExtractor(dept_cds=SMALL_STORE), FROM_DATE, TO_DATE, engine=engine)
+
+    before = _fact_snapshot(engine)
+    assert before["FACT_RECEIPT"][0] > 0
+
+    marts_before = _read_table(engine, schema.MART_DAY_STORE, ["SALEDATE", "DEPT_CD"])
+    briefings_before = _read_table(engine, schema.BRIEFING_DAILY, ["SALEDATE", "DEPT_CD"])
+
+    pipeline.slim_for_deploy(engine)
+
+    after = _fact_snapshot(engine)
+    assert after["FACT_RECEIPT"][0] == 0
+    assert after["FACT_RECEIPT_ITEM"][0] == 0
+    assert after["FACT_PAYMENT"][0] == 0
+
+    pd.testing.assert_frame_equal(
+        marts_before, _read_table(engine, schema.MART_DAY_STORE, ["SALEDATE", "DEPT_CD"])
+    )
+    pd.testing.assert_frame_equal(
+        briefings_before,
+        _read_table(engine, schema.BRIEFING_DAILY, ["SALEDATE", "DEPT_CD"]),
+    )
+    assert briefing.SCHEMA_VERSION >= 1
+
+
+def test_slimmed_db_still_supports_admin_regeneration(tmp_path: Path) -> None:
+    """ADR-0009: 원장이 비어 있어도 관리자 재생성이 같은 숫자를 복원한다."""
+    engine = get_engine(tmp_path / "regen.db")
+    extractor = SampleExtractor(dept_cds=SMALL_STORE)
+
+    pipeline.load_period(extractor, FROM_DATE, TO_DATE, engine=engine)
+    marts_before = _read_table(engine, schema.MART_DAY_STORE, ["SALEDATE", "DEPT_CD"])
+
+    pipeline.slim_for_deploy(engine)
+    pipeline.load_period(extractor, FROM_DATE, TO_DATE, engine=engine)
+
+    pd.testing.assert_frame_equal(
+        marts_before, _read_table(engine, schema.MART_DAY_STORE, ["SALEDATE", "DEPT_CD"])
+    )
+    assert _fact_snapshot(engine)["FACT_RECEIPT"][0] > 0
+
+
+def test_cli_deploy_flag_slims_database(tmp_path: Path) -> None:
+    """CLI --deploy 가 구축 직후 원장을 비운다."""
+    db_path = tmp_path / "cli_deploy.db"
+
+    exit_code = pipeline.main(
+        ["--from", FROM_DATE, "--to", FROM_DATE, "--stores", "901003",
+         "--db", str(db_path), "--deploy"]
+    )
+
+    assert exit_code == 0
+    engine = get_engine(db_path)
+    assert _fact_snapshot(engine)["FACT_RECEIPT"][0] == 0
+    assert len(_read_table(engine, schema.BRIEFING_DAILY, ["SALEDATE"])) == 1
+
+
+def test_cli_without_deploy_keeps_facts(tmp_path: Path) -> None:
+    """--deploy 를 주지 않으면 원장이 그대로 남는다 (기본 동작 보호)."""
+    db_path = tmp_path / "cli_full.db"
+
+    pipeline.main(
+        ["--from", FROM_DATE, "--to", FROM_DATE, "--stores", "901003", "--db", str(db_path)]
+    )
+
+    assert _fact_snapshot(get_engine(db_path))["FACT_RECEIPT"][0] > 0
