@@ -234,7 +234,15 @@ python -m src.load.publish
 > Supabase에 쓰인다. 멱등을 화면에서 증명하는 장치라 그대로 두지만,
 > "원장은 발행하지 않는다"는 원칙의 유일한 예외다.
 
-### 3. Streamlit Cloud 설정
+### 3. Streamlit Cloud 배포
+
+[share.streamlit.io](https://share.streamlit.io) → **Create app** → 저장소를 고르고
+**Main file path 는 `streamlit_app.py`** (기본값 그대로) 로 둔다.
+
+> ⚠️ `src/app/main.py` 를 직접 지정하면 **`ModuleNotFoundError: No module named 'src'`** 로 죽는다.
+> `streamlit run` 은 실행 스크립트가 있는 폴더만 import 경로에 넣기 때문에 저장소 루트가 빠진다.
+> 루트의 `streamlit_app.py` 가 경로를 잡아 주는 역할을 한다 — 로컬 실행
+> (`streamlit run src/app/main.py`)은 지금까지처럼 그대로 된다.
 
 앱 설정의 **Secrets**에 한 줄을 넣는다.
 

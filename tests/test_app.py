@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import ast
+import os
 import inspect as inspect_module
 import json
 from pathlib import Path
@@ -285,8 +286,29 @@ def test_no_deprecated_streamlit_api() -> None:
 
 
 def test_database_url_returns_none_without_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
-    """secrets.toml 이 없는 로컬 실행에서 예외 없이 None을 돌려준다."""
+    """secrets.toml 이 없는 로컬 실행에서 예외 없이 None을 돌려준다.
+
+    개발자 PC에 실제 `secrets.toml` 이 있어도 결과가 달라지면 안 되므로,
+    "파일이 없는 상태"를 명시적으로 흉내 낸다.
+    """
     from src.app import main
+
+    class _MissingSecretsFile:
+        """`secrets.toml` 이 없을 때의 streamlit 동작을 흉내 낸다."""
+
+        def get(self, _key: str) -> None:
+            """조회하면 파일이 없다고 알린다.
+
+            Args:
+                _key: 조회할 키 (쓰지 않는다).
+
+            Raises:
+                FileNotFoundError: 항상.
+            """
+            raise FileNotFoundError("secrets.toml 없음")
+
+    # streamlit 의 Secrets 객체는 속성 대입을 막으므로 모듈의 `st` 를 통째로 바꾼다.
+    monkeypatch.setattr(main.st, "secrets", _MissingSecretsFile(), raising=False)
 
     assert main.database_url() is None
 
@@ -337,3 +359,86 @@ def test_admin_regeneration_keeps_totals(built_engine: Engine) -> None:
     after = main.load_totals(built_engine, "20260701", "20260705")
 
     assert before == after
+
+
+# --- 클라우드 진입점 (명세 15장) ---------------------------------------------
+
+
+def _repo_root() -> Path:
+    """저장소 루트 경로를 돌려준다.
+
+    Returns:
+        ``streamlit_app.py`` 가 놓이는 저장소 루트.
+    """
+    return Path(__file__).resolve().parents[1]
+
+
+def test_cloud_entry_point_exists() -> None:
+    """저장소 루트에 진입점이 있다 — Streamlit Cloud의 기본 파일명이다."""
+    assert (_repo_root() / "streamlit_app.py").is_file()
+
+
+def test_cloud_entry_point_puts_repo_root_on_path() -> None:
+    """진입점은 import 하기 **전에** 저장소 루트를 경로에 넣는다.
+
+    `streamlit run` 은 실행 스크립트의 폴더만 경로에 넣는다. 그 순서가 뒤집히면
+    클라우드에서 `No module named 'src'` 로 죽는다.
+    """
+    source = (_repo_root() / "streamlit_app.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    path_setup_line = next(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "insert"
+    )
+    app_import_line = next(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and (node.module or "").startswith("src.app")
+    )
+
+    assert path_setup_line < app_import_line
+
+
+def test_app_imports_when_only_repo_root_on_path(tmp_path: Path) -> None:
+    """저장소 루트만 경로에 있으면 어디서 실행해도 화면이 import 된다.
+
+    진입점이 보장하려는 조건을 그대로 재현한다 — 작업 디렉토리는 무관해야 한다.
+    """
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            f"import sys; sys.path.insert(0, r'{_repo_root()}'); "
+            "import src.app.main; print('OK')",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={"PATH": os.environ.get("PATH", ""), "SYSTEMROOT": os.environ.get("SYSTEMROOT", "")},
+    )
+
+    assert result.stdout.strip() == "OK", result.stderr[-500:]
+
+
+def test_cloud_entry_point_renders_without_exception(built_engine: Engine) -> None:
+    """진입점을 실제로 실행해 화면이 예외 없이 그려지는지 본다 (배포 경로 그대로).
+
+    import 경로·secrets 읽기·질의·렌더링이 한 번에 걸리는 유일한 지점이라,
+    클라우드에서 처음 터지는 사고를 여기서 잡는다.
+    """
+    from streamlit.testing.v1 import AppTest
+
+    app_test = AppTest.from_file(str(_repo_root() / "streamlit_app.py"), default_timeout=60)
+    app_test.secrets["POS_BRIEFING_DB_URL"] = str(built_engine.url)
+
+    app_test.run()
+
+    assert not app_test.exception, [error.value for error in app_test.exception]
+    assert any("오늘의 브리핑" in block.value for block in app_test.markdown)
