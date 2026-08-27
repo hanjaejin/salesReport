@@ -68,7 +68,10 @@ CLI 옵션:
 | `--from` / `--to` | 기간 `YYYYMMDD` (필수) |
 | `--stores` | 점포코드 쉼표 구분. 생략하면 전 점포 |
 | `--db` | SQLite 경로. 생략하면 `data/pos_mockup.db` |
-| `--deploy` | 구축 후 원장을 비워 배포용으로 줄인다. **마지막에만** 사용 ([ADR-0009](doc/adr/0009-배포용-DB는-읽기-모델만-담는다.md)) |
+| `--deploy` | 구축 후 원장을 비워 배포용으로 줄인다 (오프라인 배포용 대안 경로 — [ADR-0009](doc/adr/0009-배포용-DB는-읽기-모델만-담는다.md)) |
+
+연결 대상은 코드를 고치지 않고 바꾼다 — `POS_BRIEFING_DB_URL` 환경변수에 연결 URL을 넣으면
+파이프라인·화면·보고서가 모두 그 DB를 쓴다. 없으면 로컬 `data/pos_mockup.db`다.
 
 ---
 
@@ -109,7 +112,7 @@ project02_salesReport/
 │   ├── common/{config,logger,dateutil}.py   공통 설정·로거·날짜
 │   ├── extract/{base,sample,oracle_stub}.py Extractor 계약과 구현체
 │   ├── generate/synth.py                    합성 데이터 생성
-│   ├── load/{schema,pipeline}.py            DDL·적재 파이프라인
+│   ├── load/{schema,pipeline,publish}.py    DDL·적재 파이프라인·원격 발행
 │   ├── mart/{aggregate,briefing}.py         집계·브리핑 문장 생성
 │   ├── report/{daily_report,snapshot}.py    xlsx 보고서·오프라인 HTML 스냅샷
 │   └── app/main.py                          Streamlit 화면
@@ -179,28 +182,48 @@ project02_salesReport/
 
 ## 클라우드 배포 (명세 15장)
 
-### 1. 배포용 DB 만들기
+데이터는 **Supabase(PostgreSQL)** 에 두고, 저장소에는 코드·스키마·씨앗 사전만 둔다
+([ADR-0011](doc/adr/0011-데이터는-Supabase에-두고-저장소에는-코드만-둔다.md)).
+`data/pos_mockup.db`는 계속 git 제외 대상이다.
 
-전체 구축본은 171MB로 **GitHub 파일 한도(100MB)를 넘는다.** 화면이 읽는 것은
-마트와 브리핑뿐이므로 원장을 비워 **17.9MB**로 줄인다 ([ADR-0009](doc/adr/0009-배포용-DB는-읽기-모델만-담는다.md)).
-
-```bash
-python -m src.load.pipeline --from 20250701 --to 20260731 --deploy
-```
-
-원장은 언제든 같은 명령을 `--deploy` 없이 돌려 복원할 수 있다 (파생 시드가 결정적이므로 동일).
-
-### 2. 저장소에 DB 동봉
-
-`data/pos_mockup.db`는 평소 `.gitignore` 대상이다. 배포 시점에 한 번 강제로 올린다.
+### 1. 로컬에서 구축
 
 ```bash
-git add -f data/pos_mockup.db
-git commit -m "[deploy] 배포용 읽기모델 DB 동봉"
-git push
+python -m src.load.pipeline --from 20250701 --to 20260731
 ```
 
-### 3. 배포 구성 (3중 백업)
+### 2. 읽기 모델을 Supabase로 발행
+
+```bash
+# 대상 URL은 환경변수로 준다 — 명령행에 적으면 셸 이력에 비밀번호가 남는다
+export POS_BRIEFING_TARGET_URL="postgresql://postgres.<ref>:<password>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+python -m src.load.publish
+```
+
+```powershell
+# Windows / PowerShell
+$env:POS_BRIEFING_TARGET_URL = "postgresql://postgres.<ref>:<password>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+python -m src.load.publish
+```
+
+스키마 생성부터 적재까지 이 한 줄로 끝난다. 옮기는 것은 **132,789행**(마트 3종 + 브리핑 + 점포)이고,
+원장 463,544건은 보내지 않는다 — 화면이 읽지 않고, 필요하면 로컬에서 되살릴 수 있기 때문이다.
+
+> ⚠️ 연결 문자열은 Supabase 대시보드의 **Session pooler**(포트 **5432**)를 쓴다.
+> Transaction pooler(6543)는 준비된 구문을 지원하지 않아 대량 적재에서 실패한다.
+
+### 3. Streamlit Cloud 설정
+
+앱 설정의 **Secrets**에 한 줄을 넣는다.
+
+```toml
+POS_BRIEFING_DB_URL = "postgresql://postgres.<ref>:<password>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+```
+
+이 값이 없으면 앱은 로컬 `data/pos_mockup.db`로 떨어지므로, 로컬 개발은 설정 없이 그대로 된다.
+연결 문자열은 로그·화면 어디에도 표시되지 않는다.
+
+### 4. 배포 구성 (3중 백업)
 
 | 구성 | 내용 |
 |---|---|
@@ -211,9 +234,15 @@ git push
 
 발표 노트북 요구사항은 **브라우저 + USB 포트가 전부**다 (설치 0).
 
-### 4. 발표일 운영
+> ⚠️ **보험 1의 한계**: 데이터가 Supabase 한 곳에 있으므로 주력(Streamlit Cloud)과
+> 보험 1(HF Spaces)이 **같은 단일 장애점을 공유**한다. Supabase가 멈추면 URL 두 개가 다 빈다.
+> 이 경우 보험 2(오프라인 스냅샷)로 완주한다 — 그래서 스냅샷이 선택이 아니라 필수다
+> ([ADR-0011](doc/adr/0011-데이터는-Supabase에-두고-저장소에는-코드만-둔다.md) 참조).
 
-- **전날**: URL 2개 접속 확인 / USB의 영상·스냅샷 열림 확인
+### 5. 발표일 운영
+
+- **전날**: URL 2개 접속 확인 / USB의 영상·스냅샷 열림 확인 / **Supabase 프로젝트가 깨어 있는지 확인**
+  (무료 티어는 미사용 시 프로젝트를 재운다 — 데이터가 클라우드에 있으므로 이 확인이 필수다)
 - **30분 전**: URL 2개를 탭으로 열어 콜드스타트 깨우고 유지
 - **직전**: 주력 탭에서 브리핑·관리자 버튼 각 1회 워밍업, 보험1 탭 대기
 - **발표 중**: 주력=클라우드 URL, QR 슬라이드로 청중 폰 접속 유도

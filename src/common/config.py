@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import hashlib
+import os
 from pathlib import Path
 from typing import Final
 
@@ -22,6 +23,9 @@ DATA_DIR: Final[Path] = PROJECT_ROOT / "data"
 
 #: 데모용 SQLite 파일 (명세 3장)
 DB_PATH: Final[Path] = DATA_DIR / "pos_mockup.db"
+
+#: 연결 URL을 덮어쓰는 환경변수. 원격 PostgreSQL(Supabase)로 옮길 때 쓴다 (ADR-0011).
+DB_URL_ENV: Final[str] = "POS_BRIEFING_DB_URL"
 
 #: 씨앗에서 추출해 동결한 상품 사전 (ADR-0002)
 SEED_CATALOG_PATH: Final[Path] = PROJECT_ROOT / "src" / "generate" / "seed_catalog.json"
@@ -55,23 +59,68 @@ LINE1_THRESHOLD_PCT: Final[float] = 3.0
 DOW_BASELINE_WEEKS: Final[int] = 4
 
 
-def get_engine(db_path: Path | str | None = None, *, echo: bool = False) -> Engine:
-    """SQLite 엔진을 만든다.
+def resolve_database_url(target: Path | str | None = None) -> str:
+    """대상 DB의 연결 URL을 정한다.
+
+    우선순위: 인자 → 환경변수 ``POS_BRIEFING_DB_URL`` → 로컬 SQLite 기본값.
+
+    명세 3장이 "추후 PostgreSQL/Supabase 교체 대비"를 요구했으므로, 코드를 고치지 않고
+    **URL만 바꿔** 원격 PostgreSQL로 옮길 수 있게 한다 (ADR-0011).
 
     Args:
-        db_path: DB 파일 경로. None이면 ``DB_PATH``.
+        target: 파일 경로 또는 ``postgresql://`` 같은 연결 URL. None이면 환경변수·기본값.
+
+    Returns:
+        SQLAlchemy 연결 URL.
+    """
+    if target is None:
+        target = os.environ.get(DB_URL_ENV) or DB_PATH
+
+    text = str(target)
+    if "://" in text:
+        return text
+    return f"sqlite:///{Path(text)}"
+
+
+def get_engine(target: Path | str | None = None, *, echo: bool = False) -> Engine:
+    """DB 엔진을 만든다 (SQLite·PostgreSQL 공통).
+
+    Args:
+        target: 파일 경로 또는 연결 URL. None이면 환경변수·기본값 (``resolve_database_url``).
         echo: True면 SQLAlchemy가 실행 SQL을 로깅한다 (디버깅용).
 
     Returns:
         SQLAlchemy Core 엔진.
 
     Note:
-        상위 디렉토리가 없으면 만든다 — 첫 실행에서 ``data/`` 가 비어 있어도
+        SQLite면 상위 디렉토리를 만든다 — 첫 실행에서 ``data/`` 가 비어 있어도
         파이프라인이 바로 돌아야 하기 때문이다.
+
+        원격 DB에는 ``pool_pre_ping`` 을 켠다. 유휴 연결이 끊긴 뒤 첫 질의가
+        실패하는 것을 막는다 — 발표 도중 화면이 비는 사고를 예방하는 장치다.
     """
-    path = Path(db_path) if db_path is not None else DB_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    return create_engine(f"sqlite:///{path}", echo=echo)
+    url = resolve_database_url(target)
+
+    if url.startswith("sqlite"):
+        Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
+        return create_engine(url, echo=echo)
+
+    return create_engine(url, echo=echo, pool_pre_ping=True, pool_recycle=300)
+
+
+def is_sqlite(engine: Engine) -> bool:
+    """엔진이 SQLite인지 알려준다.
+
+    방언마다 다르게 다뤄야 하는 지점(예: ``VACUUM``)에서만 쓴다.
+    질의 자체는 방언에 의존하지 않는다 (명세 3장).
+
+    Args:
+        engine: 검사할 엔진.
+
+    Returns:
+        SQLite면 True.
+    """
+    return engine.dialect.name == "sqlite"
 
 
 def derive_seed(dept_cd: str, saledate: str) -> int:

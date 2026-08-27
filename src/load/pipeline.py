@@ -356,15 +356,20 @@ def slim_for_deploy(engine: Engine) -> None:
     """
     from sqlalchemy import text
 
+    from src.common.config import is_sqlite
+
     tables = (schema.FACT_RECEIPT, schema.FACT_RECEIPT_ITEM, schema.FACT_PAYMENT)
 
     with engine.begin() as connection:
         for table in tables:
             connection.execute(delete(table))
 
-    # VACUUM은 트랜잭션 밖에서만 실행할 수 있다.
-    with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
-        connection.execute(text("VACUUM"))
+    # 파일 크기를 실제로 줄이는 VACUUM은 SQLite 이야기다. 원격 PostgreSQL에서는
+    # autovacuum이 알아서 하며, 권한도 다르다 (ADR-0011).
+    if is_sqlite(engine):
+        # VACUUM은 트랜잭션 밖에서만 실행할 수 있다.
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as connection:
+            connection.execute(text("VACUUM"))
 
     logger.info(
         "배포용 정리 완료: 원장 3종을 비웠습니다. "

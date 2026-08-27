@@ -19,8 +19,9 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 from sqlalchemy import Engine, select
+from streamlit.errors import StreamlitAPIException
 
-from src.common.config import DB_PATH, get_engine
+from src.common.config import DB_PATH, DB_URL_ENV, get_engine, is_sqlite
 from src.common.dateutil import date_range, format_date, parse_date, shift_days
 from src.load import schema
 
@@ -44,6 +45,28 @@ ADMIN_REGEN_DAYS = 7
 
 
 # --- 데이터 접근: 저장된 것을 읽기만 한다 -----------------------------------
+
+
+def database_url() -> str | None:
+    """화면이 붙을 DB를 정한다 (ADR-0011).
+
+    우선순위: Streamlit secrets → 환경변수 → 로컬 SQLite.
+    클라우드 배포에서는 secrets에 원격 PostgreSQL(Supabase) 연결 문자열을 넣고,
+    로컬 개발에서는 아무것도 설정하지 않으면 ``data/pos_mockup.db`` 를 쓴다.
+
+    **연결 문자열은 화면 어디에도 표시하지 않는다.** 사용자에게 키를 요구하지 않는
+    원칙(불변식 7)은 그대로다 — 값은 운영자가 배포 설정에 넣고, 사용자는 URL만 연다.
+
+    Returns:
+        연결 URL. 설정된 것이 없으면 None (기본 SQLite로 떨어진다).
+    """
+    try:
+        secret = st.secrets.get(DB_URL_ENV)
+    except (FileNotFoundError, StreamlitAPIException):
+        # secrets.toml 이 없는 로컬 실행 — 정상 경로다.
+        secret = None
+
+    return str(secret) if secret else None
 
 
 def load_stores(engine: Engine) -> pd.DataFrame:
@@ -378,7 +401,7 @@ def main() -> None:
     """화면 전체를 그린다."""
     st.set_page_config(page_title=PAGE_TITLE, page_icon="🏪", layout="centered")
 
-    engine = get_engine()
+    engine = get_engine(database_url())
     stores = load_stores(engine)
 
     if stores.empty:
@@ -413,7 +436,7 @@ def main() -> None:
 
     st.divider()
     st.caption(FOOTER_NOTE)
-    st.caption(f"DB: {DB_PATH.name}")
+    st.caption(f"데이터: {DB_PATH.name if is_sqlite(engine) else '클라우드 데이터베이스'}")
 
 
 if __name__ == "__main__":

@@ -34,7 +34,12 @@ def built_engine(tmp_path_factory: pytest.TempPathFactory) -> Engine:
 
 
 def test_app_makes_no_external_calls() -> None:
-    """명세 14장: 외부 CDN·API·모델 다운로드가 없다 (폐쇄망 대비)."""
+    """명세 14장: 외부 CDN·API·모델 다운로드가 없다 (폐쇄망 대비).
+
+    데이터베이스 연결은 여기서 말하는 "외부 호출"이 아니다 — 제품의 데이터 계층이며,
+    폐쇄망에서는 망 안의 PostgreSQL을 가리키면 된다 (ADR-0011). 금지하는 것은
+    화면이 제3자 서비스에 HTTP로 붙거나 모델을 내려받는 일이다.
+    """
     from src.app import main
 
     source = Path(inspect_module.getfile(main)).read_text(encoding="utf-8")
@@ -274,6 +279,40 @@ def test_no_deprecated_streamlit_api() -> None:
 
     assert "use_container_width" not in source
     assert 'width="stretch"' in source
+
+
+# --- 연결 대상 (ADR-0011) ----------------------------------------------------
+
+
+def test_database_url_returns_none_without_secrets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """secrets.toml 이 없는 로컬 실행에서 예외 없이 None을 돌려준다."""
+    from src.app import main
+
+    assert main.database_url() is None
+
+
+def test_database_url_reads_streamlit_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """배포에서는 Streamlit secrets의 연결 문자열을 쓴다."""
+    import streamlit as st
+
+    from src.app import main
+
+    monkeypatch.setattr(
+        st, "secrets", {main.DB_URL_ENV: "postgresql://u:p@host:5432/postgres"}
+    )
+
+    assert main.database_url() == "postgresql://u:p@host:5432/postgres"
+
+
+def test_app_never_displays_connection_string() -> None:
+    """연결 문자열을 화면에 찍지 않는다 — 자격 증명이 새면 안 된다."""
+    from src.app import main
+
+    source = Path(inspect_module.getfile(main)).read_text(encoding="utf-8")
+
+    assert "st.caption(f\"데이터: {DB_PATH.name if is_sqlite(engine)" in source
+    for leak in ("st.write(database_url", "st.caption(database_url", "st.text(database_url"):
+        assert leak not in source
 
 
 def test_admin_regen_window_is_seven_days() -> None:

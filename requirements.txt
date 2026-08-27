@@ -9,5 +9,9 @@ SQLAlchemy>=2.0
 streamlit>=1.49
 openpyxl>=3.1
 
+# 원격 PostgreSQL(Supabase) 연결 드라이버 (ADR-0011).
+# 로컬 SQLite만 쓸 때는 없어도 되지만, 클라우드 배포에는 반드시 필요하다.
+psycopg2-binary>=2.9
+
 # 개발·검증용 (배포에도 남겨 둔다 — 클라우드에서 pytest를 돌려 볼 수 있게)
 pytest>=8.0
