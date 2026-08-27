@@ -1,0 +1,12 @@
+# 30초 매장 브리핑 데모 — 런타임 의존성
+# 버전은 하한만 고정한다 (ADR-0004): Streamlit Community Cloud가
+# 자체 해석으로 최신 호환 버전을 고르게 둔다.
+
+pandas>=2.2
+numpy>=1.26
+SQLAlchemy>=2.0
+streamlit>=1.40
+openpyxl>=3.1
+
+# 개발·검증용 (배포에도 남겨 둔다 — 클라우드에서 pytest를 돌려 볼 수 있게)
+pytest>=8.0
