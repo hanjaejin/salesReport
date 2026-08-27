@@ -1,0 +1,1108 @@
+{
+  "meta": {
+    "설명": "씨앗 엑셀에서 추출해 동결한 상품 사전. build_catalog.py가 생성한다 (ADR-0002).",
+    "source_file": "DATA_영수증데이터.xlsx",
+    "source_dept_cd": [
+      "202246"
+    ],
+    "source_rows": 3412,
+    "source_receipts": 2344,
+    "source_unique_products": 664,
+    "extracted_at": "2026-08-27",
+    "excluded_head_nm": [
+      "담배",
+      "주류"
+    ],
+    "plu_pattern": "^88\\d{11}$",
+    "selected_products": 120,
+    "avg_lines_per_receipt": 1.4556
+  },
+  "qty_distribution": {
+    "1": 0.9068,
+    "2": 0.076202,
+    "3": 0.007327,
+    "4": 0.009672
+  },
+  "products": [
+    {
+      "plu_cd": "8809279269857",
+      "goods_nm": "델리카)점보참치마요네즈삼각",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 1600,
+      "group": "간편식",
+      "weight": 23
+    },
+    {
+      "plu_cd": "8809015470882",
+      "goods_nm": "영우)전주비빔참치마요김밥",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 2700,
+      "group": "간편식",
+      "weight": 20
+    },
+    {
+      "plu_cd": "8801118400735",
+      "goods_nm": "델리카)점보소고기고추장삼각",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 1600,
+      "group": "간편식",
+      "weight": 15
+    },
+    {
+      "plu_cd": "8801118400742",
+      "goods_nm": "델리카)점보김치제육삼각김밥",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 1600,
+      "group": "간편식",
+      "weight": 15
+    },
+    {
+      "plu_cd": "8801118799938",
+      "goods_nm": "델리카)전주비빔삼각김밥",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 1300,
+      "group": "간편식",
+      "weight": 12
+    },
+    {
+      "plu_cd": "8801118404153",
+      "goods_nm": "델리카)참치김밥",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 4800,
+      "group": "간편식",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8801118407710",
+      "goods_nm": "델리카)함박스테이크＆참치김밥",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 2500,
+      "group": "간편식",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8809279269031",
+      "goods_nm": "델리카)참치마요네즈삼각김밥",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 1300,
+      "group": "간편식",
+      "weight": 9
+    },
+    {
+      "plu_cd": "8809410620684",
+      "goods_nm": "굿모닝컴)버터크림빵",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 2500,
+      "group": "간편식",
+      "weight": 9
+    },
+    {
+      "plu_cd": "8801118404177",
+      "goods_nm": "델리카)소고기김밥",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 4800,
+      "group": "간편식",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8809410620998",
+      "goods_nm": "굿모닝컴)카스테라",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 2500,
+      "group": "간편식",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8801118400827",
+      "goods_nm": "델리카)유부초밥4입",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 3000,
+      "group": "간편식",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801118799945",
+      "goods_nm": "델리카)고추장불고기삼각김밥",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 1300,
+      "group": "간편식",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801077384305",
+      "goods_nm": "진주)천하장사콰트로치즈50g",
+      "item_head": "07",
+      "item_head_nm": "식료",
+      "price": 2400,
+      "group": "간편식",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801118400919",
+      "goods_nm": "델리카)듬뿍햄치즈에그샌드위치",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 2800,
+      "group": "간편식",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801118400933",
+      "goods_nm": "델리카)햄치즈포테이토샌드위치",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 2700,
+      "group": "간편식",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801118400957",
+      "goods_nm": "델리카)NEW듬뿍햄샌드위치",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 2500,
+      "group": "간편식",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801118431579",
+      "goods_nm": "델리카)대만식햄치즈샌드위치",
+      "item_head": "02",
+      "item_head_nm": "Fresh Food",
+      "price": 2900,
+      "group": "간편식",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8809304350734",
+      "goods_nm": "하나로)투명돌라이터",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 700,
+      "group": "생활",
+      "weight": 15
+    },
+    {
+      "plu_cd": "8801441006253",
+      "goods_nm": "크리오)휴대용칫솔치약세트",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 3500,
+      "group": "생활",
+      "weight": 13
+    },
+    {
+      "plu_cd": "8809148584968",
+      "goods_nm": "티머니)트래블카드",
+      "item_head": "11",
+      "item_head_nm": "기타",
+      "price": 4000,
+      "group": "생활",
+      "weight": 11
+    },
+    {
+      "plu_cd": "8809381794612",
+      "goods_nm": "코레버N)여행용티슈70매(무민)",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 800,
+      "group": "생활",
+      "weight": 11
+    },
+    {
+      "plu_cd": "8801166234399",
+      "goods_nm": "유한)좋은느낌오리지널울날중4",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 2000,
+      "group": "생활",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8809180747529",
+      "goods_nm": "미래)코레버자연수물티슈(10매)",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 1100,
+      "group": "생활",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8809180747536",
+      "goods_nm": "미래)코레버자연수물티슈(30매)",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 1700,
+      "group": "생활",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8806011616153",
+      "goods_nm": "동아)가그린제로100ml",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 2300,
+      "group": "생활",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801166054614",
+      "goods_nm": "유한)크리넥스마이비데물티슈40",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 3300,
+      "group": "생활",
+      "weight": 5
+    },
+    {
+      "plu_cd": "8801166131056",
+      "goods_nm": "유한)크리넥스KF944단마스크",
+      "item_head": "10",
+      "item_head_nm": "잡화",
+      "price": 1500,
+      "group": "생활",
+      "weight": 4
+    },
+    {
+      "plu_cd": "8809724620240",
+      "goods_nm": "코레버)무라벨얼음컵220g",
+      "item_head": "05",
+      "item_head_nm": "냉동",
+      "price": 900,
+      "group": "스낵",
+      "weight": 49
+    },
+    {
+      "plu_cd": "8801062318551",
+      "goods_nm": "롯데)자일리톨F",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 18
+    },
+    {
+      "plu_cd": "8801043031431",
+      "goods_nm": "농심)쫄병매콤한맛82g",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8801062318490",
+      "goods_nm": "롯데)자일리톨(코팅)",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8801117120306",
+      "goods_nm": "오리온)통크초코",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8801068407501",
+      "goods_nm": "삼립)미니꿀약과70g",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8802259031673",
+      "goods_nm": "롯데)빼빼로초코(삼성)",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 2000,
+      "group": "스낵",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8802259032212",
+      "goods_nm": "롯데)빼빼로아몬드(KIA)",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 2000,
+      "group": "스낵",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8801019204951",
+      "goods_nm": "해태)자유시간",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801019306907",
+      "goods_nm": "해태)에이스121g",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1700,
+      "group": "스낵",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801062323159",
+      "goods_nm": "롯데)후라보노",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801117536411",
+      "goods_nm": "오리온)초코파이(2입)",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 900,
+      "group": "스낵",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8802259031918",
+      "goods_nm": "롯데)빼빼로초코필드(LG)",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 2000,
+      "group": "스낵",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801019313196",
+      "goods_nm": "해태)오예스(2입)",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1100,
+      "group": "스낵",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801062318414",
+      "goods_nm": "롯데)자일리톨(판)",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801062518210",
+      "goods_nm": "롯데)칸쵸",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1500,
+      "group": "스낵",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801117138004",
+      "goods_nm": "오리온)오그래놀라바단백질",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1200,
+      "group": "스낵",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801117282301",
+      "goods_nm": "오리온)뉴예감치즈그라탕",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1500,
+      "group": "스낵",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801117299101",
+      "goods_nm": "오리온)무뚝뚝고구마",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 2000,
+      "group": "스낵",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801117760908",
+      "goods_nm": "오리온)오징어땅콩",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 1600,
+      "group": "스낵",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8802259032168",
+      "goods_nm": "롯데)빼빼로아몬드(KT)",
+      "item_head": "06",
+      "item_head_nm": "과자/스낵류",
+      "price": 2000,
+      "group": "스낵",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801115114031",
+      "goods_nm": "서울)서울우유200ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1200,
+      "group": "유제품",
+      "weight": 21
+    },
+    {
+      "plu_cd": "8801115134039",
+      "goods_nm": "서울)커피우유200ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1300,
+      "group": "유제품",
+      "weight": 16
+    },
+    {
+      "plu_cd": "8801069174839",
+      "goods_nm": "남양)맛있는우유GT310ml",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1750,
+      "group": "유제품",
+      "weight": 15
+    },
+    {
+      "plu_cd": "8801121130568",
+      "goods_nm": "매일)커피속에모카치노300ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2000,
+      "group": "유제품",
+      "weight": 14
+    },
+    {
+      "plu_cd": "8801121103661",
+      "goods_nm": "매일)우유속에코코아300ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2000,
+      "group": "유제품",
+      "weight": 13
+    },
+    {
+      "plu_cd": "8801104301862",
+      "goods_nm": "빙)대용량요구르트280ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1600,
+      "group": "유제품",
+      "weight": 11
+    },
+    {
+      "plu_cd": "8801121190197",
+      "goods_nm": "매일)허쉬초코드링크235ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1600,
+      "group": "유제품",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8801128306249",
+      "goods_nm": "야쿠)호우섬밀크티(로얄)350ml",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2600,
+      "group": "유제품",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8809846900886",
+      "goods_nm": "매일)셀렉스프로핏모카초코250ml",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2900,
+      "group": "유제품",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8801069411774",
+      "goods_nm": "남양)맛있는우유GT(딸기)300ml",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1950,
+      "group": "유제품",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8801115134435",
+      "goods_nm": "서울)딸기우유200ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1300,
+      "group": "유제품",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8801155741846",
+      "goods_nm": "동덴)덴마크요구르트베리275ml",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2400,
+      "group": "유제품",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8801033000126",
+      "goods_nm": "정)베지밀B병190ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1800,
+      "group": "유제품",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801069171067",
+      "goods_nm": "남양)초코에몽190ml(리뉴얼)",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1600,
+      "group": "유제품",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801069411798",
+      "goods_nm": "남양)맛있는우유GT(초코)300ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1950,
+      "group": "유제품",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801155741822",
+      "goods_nm": "동덴)덴마크요구르트딸기275ml",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2400,
+      "group": "유제품",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801155741877",
+      "goods_nm": "동덴)덴마크요구르트복숭아275ml",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2400,
+      "group": "유제품",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801115110019",
+      "goods_nm": "서울)A2플러스우유(PET)180ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1700,
+      "group": "유제품",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801115118138",
+      "goods_nm": "서울)저지방우유200ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1200,
+      "group": "유제품",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801121103388",
+      "goods_nm": "매일)우유속에딸기300ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2000,
+      "group": "유제품",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801128230018",
+      "goods_nm": "야쿠)윌150ML",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 1600,
+      "group": "유제품",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801128306867",
+      "goods_nm": "야쿠)호우섬타로밀크티300ml",
+      "item_head": "04",
+      "item_head_nm": "냉장",
+      "price": 2800,
+      "group": "유제품",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801043022781",
+      "goods_nm": "농심)백산수500ml",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1000,
+      "group": "음료",
+      "weight": 392
+    },
+    {
+      "plu_cd": "8808244201014",
+      "goods_nm": "광동)제주삼다수500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1100,
+      "group": "음료",
+      "weight": 111
+    },
+    {
+      "plu_cd": "8806002006437",
+      "goods_nm": "광동)옥수수수염차500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2000,
+      "group": "음료",
+      "weight": 93
+    },
+    {
+      "plu_cd": "8801094412005",
+      "goods_nm": "코카)토레타500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2200,
+      "group": "음료",
+      "weight": 57
+    },
+    {
+      "plu_cd": "8801382124849",
+      "goods_nm": "웅진)하늘보리500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1800,
+      "group": "음료",
+      "weight": 51
+    },
+    {
+      "plu_cd": "8806002005638",
+      "goods_nm": "광동)옥수수수염차340ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1600,
+      "group": "음료",
+      "weight": 42
+    },
+    {
+      "plu_cd": "8801097250048",
+      "goods_nm": "동아)포카리스웨트500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2300,
+      "group": "음료",
+      "weight": 35
+    },
+    {
+      "plu_cd": "8801001238148",
+      "goods_nm": "진로)블랙보리340ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1600,
+      "group": "음료",
+      "weight": 30
+    },
+    {
+      "plu_cd": "8801007171210",
+      "goods_nm": "HK)헛개수500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2500,
+      "group": "음료",
+      "weight": 28
+    },
+    {
+      "plu_cd": "8801047284482",
+      "goods_nm": "동원)아이스티제로복숭아500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2500,
+      "group": "음료",
+      "weight": 22
+    },
+    {
+      "plu_cd": "8801094083007",
+      "goods_nm": "코카)코카콜라제로250ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1700,
+      "group": "음료",
+      "weight": 22
+    },
+    {
+      "plu_cd": "8806002009957",
+      "goods_nm": "광동)진한헛개차500ml",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2000,
+      "group": "음료",
+      "weight": 22
+    },
+    {
+      "plu_cd": "8801007171234",
+      "goods_nm": "HK)헛개수340ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1500,
+      "group": "음료",
+      "weight": 20
+    },
+    {
+      "plu_cd": "8801382126560",
+      "goods_nm": "웅진)초록매실500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2150,
+      "group": "음료",
+      "weight": 20
+    },
+    {
+      "plu_cd": "8801056049201",
+      "goods_nm": "칠성)게토레이레몬600ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2200,
+      "group": "음료",
+      "weight": 19
+    },
+    {
+      "plu_cd": "8806011615408",
+      "goods_nm": "동아제약)박카스F",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1000,
+      "group": "음료",
+      "weight": 17
+    },
+    {
+      "plu_cd": "8801001238049",
+      "goods_nm": "진로)블랙보리520ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2200,
+      "group": "음료",
+      "weight": 16
+    },
+    {
+      "plu_cd": "8801047284598",
+      "goods_nm": "동원)아이스티제로샤인머스켓500",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2500,
+      "group": "음료",
+      "weight": 16
+    },
+    {
+      "plu_cd": "8801056175955",
+      "goods_nm": "칠성)펩시콜라제로라임500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2300,
+      "group": "음료",
+      "weight": 14
+    },
+    {
+      "plu_cd": "8801069173986",
+      "goods_nm": "남양)17차340ml",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1800,
+      "group": "음료",
+      "weight": 14
+    },
+    {
+      "plu_cd": "8801094362706",
+      "goods_nm": "코카)파워에이드600ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2400,
+      "group": "음료",
+      "weight": 14
+    },
+    {
+      "plu_cd": "8801047284499",
+      "goods_nm": "동원)아이스티제로레몬500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2500,
+      "group": "음료",
+      "weight": 12
+    },
+    {
+      "plu_cd": "8801056017583",
+      "goods_nm": "칠성)2%복숭아제로350ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1500,
+      "group": "음료",
+      "weight": 12
+    },
+    {
+      "plu_cd": "8801094017606",
+      "goods_nm": "코카)코카콜라500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2400,
+      "group": "음료",
+      "weight": 12
+    },
+    {
+      "plu_cd": "8801094082604",
+      "goods_nm": "코카)코카콜라제로500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2400,
+      "group": "음료",
+      "weight": 12
+    },
+    {
+      "plu_cd": "8801056083564",
+      "goods_nm": "칠성)칸타타ICE블랙230ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1200,
+      "group": "음료",
+      "weight": 11
+    },
+    {
+      "plu_cd": "8801382127789",
+      "goods_nm": "웅진)자연은알로에500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2150,
+      "group": "음료",
+      "weight": 11
+    },
+    {
+      "plu_cd": "8808244201045",
+      "goods_nm": "광동)제주삼다수2L",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1950,
+      "group": "음료",
+      "weight": 11
+    },
+    {
+      "plu_cd": "8801069174020",
+      "goods_nm": "남양)17차PET500ml",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2200,
+      "group": "음료",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8801105908367",
+      "goods_nm": "코카)아침에사과500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2300,
+      "group": "음료",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8809713910185",
+      "goods_nm": "OKF)샤인머스켓500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2500,
+      "group": "음료",
+      "weight": 10
+    },
+    {
+      "plu_cd": "8806002009094",
+      "goods_nm": "광동)진한헛개차340ml",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1600,
+      "group": "음료",
+      "weight": 9
+    },
+    {
+      "plu_cd": "8806004801467",
+      "goods_nm": "현대)미에로화이바500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2200,
+      "group": "음료",
+      "weight": 9
+    },
+    {
+      "plu_cd": "8801094413705",
+      "goods_nm": "코카)토레타240ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1300,
+      "group": "음료",
+      "weight": 8
+    },
+    {
+      "plu_cd": "8801037042863",
+      "goods_nm": "동서)TOP더블랙200ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1500,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801037064346",
+      "goods_nm": "동서)TOP마스터라떼380ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 3300,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801056094591",
+      "goods_nm": "칠성)콘트라베이스블랙500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2700,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801056154011",
+      "goods_nm": "칠성)밀키스250ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1500,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801094013004",
+      "goods_nm": "코카)코카콜라250ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1700,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801117070205",
+      "goods_nm": "오리온)제주용암수330ml",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 800,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801382124528",
+      "goods_nm": "웅진)아침햇살PET500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2150,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8806016310018",
+      "goods_nm": "동화)부채표까스활",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1200,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8809626920295",
+      "goods_nm": "커넥트)링티제로복숭아500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2900,
+      "group": "음료",
+      "weight": 7
+    },
+    {
+      "plu_cd": "8801037086188",
+      "goods_nm": "동서)스타벅스오리지널병281ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 3100,
+      "group": "음료",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801056044534",
+      "goods_nm": "칠성)립톤복숭아제로500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1700,
+      "group": "음료",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801056290016",
+      "goods_nm": "칠성)레쓰비마일드175ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 1000,
+      "group": "음료",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801382125747",
+      "goods_nm": "웅진)고칼슘오렌지500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2250,
+      "group": "음료",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801382130314",
+      "goods_nm": "웅진)자연은토마토PET500ML",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2150,
+      "group": "음료",
+      "weight": 6
+    },
+    {
+      "plu_cd": "8801382149743",
+      "goods_nm": "웅진)티즐제로자몽블랙티500",
+      "item_head": "03",
+      "item_head_nm": "음료",
+      "price": 2200,
+      "group": "음료",
+      "weight": 6
+    }
+  ]
+}
