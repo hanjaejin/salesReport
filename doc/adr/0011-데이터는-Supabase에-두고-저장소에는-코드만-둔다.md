@@ -105,15 +105,53 @@ Supabase 무료 티어는 연결을 오래 붙잡아 두지 않으므로, 이 �
   (`jaejinFirst Project`)가 이미 `INACTIVE` 상태인 것이 실례다.
   → 완화: 전날·30분 전 워밍업 절차에 포함한다.
 
-- **부정: MCP 경로에서 SQL 연결이 3회 모두 타임아웃했다.** 관리 API는 정상이었다.
-  Supabase 무료 티어의 직접 연결(`db.*.supabase.co:5432`)이 IPv6 전용이라
-  IPv4 환경에서는 **Pooler**(`aws-0-ap-northeast-2.pooler.supabase.com`)를 거쳐야 하는 것이 원인으로 보인다.
-  → 대응: 스키마 생성을 `publish` 가 직접 하도록 만들어 외부 도구 없이 끝나게 했다.
-  연결 문자열은 반드시 **Session pooler**(포트 5432)를 쓴다 — Transaction pooler(6543)는
+- **부정: SQL 연결이 3회 모두 실패했다.** 관리 API는 정상이었다.
+  → 원인을 **측정으로 특정했다** (아래 결정 5). 대응으로 스키마 생성을 `publish` 가
+  직접 하도록 만들어 외부 도구 없이 끝나게 했다. 연결 문자열은 반드시
+  **Session pooler**(포트 5432)를 쓴다 — Transaction pooler(6543)는
   준비된 구문을 지원하지 않아 SQLAlchemy의 `executemany` 와 맞지 않는다.
 
 - 부정: `psycopg2-binary` 의존성이 늘었다. 로컬 SQLite만 쓸 때는 없어도 되지만
   클라우드 배포에는 필수라 `requirements.txt` 에 넣었다.
+
+## 결정 5. 연결 실패의 원인을 추측이 아니라 측정으로 확정한다
+
+처음에는 "IPv6 전용이라 그럴 것"이라고 **추측**하고 `aws-0-ap-northeast-2` 를 적었다.
+그 문자열로는 영영 붙지 않는다. 세 경로를 실제로 두드려 보고서야 원인이 갈라졌다.
+
+| 경로 | 결과 | 뜻 |
+|---|---|---|
+| `db.<ref>.supabase.co:5432` (Direct) | **DNS 실패** (`Name or service not known`) | IPv6 전용 — IPv4 망에서는 이름조차 풀리지 않는다 |
+| `aws-0-...pooler.supabase.com:5432` | TCP 5ms, `(ENOTFOUND) tenant/user ... not found` | 호스트는 살아 있으나 **이 프로젝트의 풀러가 아니다** |
+| **`aws-1-...pooler.supabase.com:5432`** | `password authentication failed` | **호스트·사용자가 정답** — 비밀번호만 있으면 된다 |
+
+가짜 비밀번호로 두드리면 자격 증명을 다루지 않고도 이 판별이 된다.
+`tenant/user not found` 는 **호스트 오류**인데 문구가 사용자 이야기를 해서
+"비밀번호가 틀렸나" 로 오해하기 쉽다 — 실제로 한 번 헛짚었다.
+
+**대응**: 세 문구를 `publish.CONNECT_HINTS` 에 표로 담고, `preflight()` 가
+복사를 시작하기 **전에** 연결을 확인해 고칠 방법을 한 줄로 알려 준다.
+`CONNECT_TIMEOUT_SEC = 10` 을 걸어 무한 대기도 막았다 — 발표 직전에 매달리지 않는다.
+
+**남는 주의**: 풀러 접두사(`aws-0`/`aws-1`)는 **프로젝트마다 다르다.**
+README에 "직접 적지 말고 대시보드 [Connect] 문자열을 복사하라"로 적었다.
+
+## 결정 6. 발행 테이블에 RLS를 켜 두고 정책은 두지 않는다
+
+Supabase의 `public` 스키마는 PostgREST로 자동 노출된다. RLS가 꺼져 있으면
+**anon 키를 가진 누구나** 마트·브리핑을 통째로 읽을 수 있다.
+
+11개 테이블 전부에 `ENABLE ROW LEVEL SECURITY` 만 걸고 정책은 만들지 않았다.
+
+- anon·authenticated → 정책이 없으니 **전부 차단**.
+- 화면·발행은 `postgres` 롤로 **직접 접속**하고, 이 롤은 `rolbypassrls = true` 다
+  (실측 확인). 그래서 **아무것도 막히지 않는다.**
+
+가상 점포의 합성 데이터라 유출 피해 자체는 없지만, 불변식 6(개인정보 컬럼 미생성)이
+"애초에 위험을 만들지 않는다"는 태도인 만큼 노출 경로도 같은 기준으로 닫았다.
+
+**주의**: 이 프로젝트는 다른 작업(`documents`, `rag_*`, `edu_*`)과 Supabase 프로젝트를
+공유한다. 테이블명이 명세 4장 그대로라 충돌하지 않지만, 남의 테이블은 건드리지 않는다.
 
 ## 대체 관계
 

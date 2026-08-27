@@ -14,6 +14,7 @@ import pandas as pd
 import pytest
 from sqlalchemy import Engine, func, select
 
+from src.common import config
 from src.common.config import DB_URL_ENV, get_engine, is_sqlite, resolve_database_url
 from src.extract.sample import SampleExtractor
 from src.load import pipeline, publish, schema
@@ -288,3 +289,65 @@ def test_cli_masks_credentials_in_logs(caplog: pytest.LogCaptureFixture) -> None
 def test_mask_url_handles_plain_sqlite() -> None:
     """비밀이 없는 URL은 그대로 보여 준다."""
     assert publish.mask_url("sqlite:///data/pos_mockup.db") == "sqlite:///data/pos_mockup.db"
+
+
+# --- 연결 사전 점검 (ADR-0011 보강) ------------------------------------------
+
+
+def test_remote_engine_limits_connect_wait() -> None:
+    """원격 연결은 기다리다 포기한다 — 발표 직전에 무한 대기하는 사고를 막는다."""
+    args = config._connect_args("postgresql://u:p@host:5432/db")
+
+    assert args["connect_timeout"] == config.CONNECT_TIMEOUT_SEC
+
+
+def test_sqlite_engine_takes_no_connect_args() -> None:
+    """로컬 SQLite에는 연결 인자를 붙이지 않는다 (드라이버가 모르는 키다)."""
+    assert config._connect_args("sqlite:///data/pos_mockup.db") == {}
+
+
+def test_preflight_reports_reachable_target(tmp_path: Path) -> None:
+    """닿는 대상이면 방언을 확인해 돌려준다 — 무엇에 붙었는지 눈으로 본다."""
+    engine = get_engine(tmp_path / "reachable.db")
+
+    assert "sqlite" in publish.preflight(engine)
+
+
+def test_preflight_explains_wrong_pooler_host() -> None:
+    """`tenant/user not found` 는 비밀번호가 아니라 **호스트**가 틀렸다는 뜻이다."""
+    hint = publish.diagnose("FATAL:  (ENOTFOUND) tenant/user postgres.abcd not found")
+
+    assert "호스트" in hint
+    assert "pooler" in hint
+
+
+def test_preflight_explains_unresolvable_direct_host() -> None:
+    """Direct connection 은 IPv6 전용이라 IPv4 망에서 이름이 풀리지 않는다."""
+    hint = publish.diagnose('could not translate host name "db.abcd.supabase.co" to address')
+
+    assert "Session pooler" in hint
+
+
+def test_preflight_explains_bad_password() -> None:
+    """비밀번호 오류는 비밀번호 오류라고 말한다 — 엉뚱한 곳을 뒤지지 않게."""
+    hint = publish.diagnose('FATAL:  password authentication failed for user "postgres"')
+
+    assert "비밀번호" in hint
+
+
+def test_diagnose_falls_back_to_generic_hint() -> None:
+    """모르는 오류도 조용히 넘기지 않는다 (빈 except 금지)."""
+    assert publish.diagnose("연결이 알 수 없는 이유로 끊겼습니다") != ""
+
+
+def test_cli_stops_before_copying_when_target_unreachable(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """대상에 닿지 않으면 복사를 시작하지 않고 진단과 함께 멈춘다."""
+    def _fail(_engine: Engine) -> str:
+        raise ConnectionError("대상에 닿지 않습니다 — 호스트를 확인하세요")
+
+    monkeypatch.setattr(publish, "preflight", _fail)
+    monkeypatch.setenv(publish.TARGET_URL_ENV, "postgresql://u:p@nowhere.invalid:5432/postgres")
+
+    assert publish.main([]) == 3

@@ -68,6 +68,82 @@ def mask_url(url: str) -> str:
     return urlunsplit((parts.scheme, host, parts.path, parts.query, parts.fragment))
 
 
+#: 연결 실패 문구 → 사람이 바로 고칠 수 있는 안내. 앞에 있는 항목이 먼저 맞는다.
+#:
+#: 이 목록은 실제로 겪은 실패에서 나왔다. Supabase의 Direct connection 호스트는
+#: IPv6 전용이라 IPv4 망에서는 이름조차 풀리지 않고, 풀러 호스트는 프로젝트마다
+#: ``aws-0``·``aws-1`` 로 갈린다. 둘 다 "비밀번호가 틀렸나?" 로 오해하기 쉬운 오류다.
+CONNECT_HINTS: tuple[tuple[str, str], ...] = (
+    (
+        "tenant/user",
+        "풀러 호스트가 프로젝트와 맞지 않습니다. Supabase 대시보드 [Connect] → "
+        "Session pooler 문자열의 호스트(aws-0/aws-1)를 그대로 복사해 쓰세요.",
+    ),
+    (
+        "could not translate host name",
+        "호스트 이름이 풀리지 않습니다. Direct connection(db.*.supabase.co)은 IPv6 전용이라 "
+        "IPv4 망에서는 쓸 수 없습니다 — Session pooler 주소(*.pooler.supabase.com:5432)를 쓰세요.",
+    ),
+    (
+        "password authentication failed",
+        "비밀번호가 틀렸습니다. Supabase 대시보드 [Connect]에서 확인하거나 "
+        "Settings → Database에서 재설정하세요.",
+    ),
+    (
+        "timeout expired",
+        "제한 시간 안에 응답이 없습니다. 방화벽이 5432 포트를 막고 있는지 확인하세요.",
+    ),
+)
+
+#: 아는 문구가 하나도 걸리지 않았을 때의 안내.
+GENERIC_HINT = (
+    "연결 문자열과 네트워크를 확인하세요. "
+    "권장 형식: postgresql://postgres.<프로젝트ref>:<비밀번호>@<호스트>.pooler.supabase.com:5432/postgres"
+)
+
+
+def diagnose(message: str) -> str:
+    """연결 오류 문구를 사람이 고칠 수 있는 안내로 옮긴다.
+
+    Args:
+        message: 드라이버가 준 오류 문구.
+
+    Returns:
+        무엇을 고쳐야 하는지 알려 주는 한 문장. 아는 것이 없으면 일반 안내.
+    """
+    lowered = message.lower()
+    for needle, hint in CONNECT_HINTS:
+        if needle in lowered:
+            return hint
+    return GENERIC_HINT
+
+
+def preflight(engine: Engine) -> str:
+    """복사를 시작하기 전에 대상에 실제로 닿는지 확인한다.
+
+    13만 행을 보내다 중간에 끊기는 것보다, 첫 연결에서 원인을 아는 편이 낫다.
+
+    Args:
+        engine: 대상 엔진.
+
+    Returns:
+        붙은 대상을 설명하는 짧은 문구 (방언·버전).
+
+    Raises:
+        ConnectionError: 대상에 닿지 않을 때. 메시지에 고칠 방법이 담긴다.
+    """
+    try:
+        with engine.connect() as connection:
+            version = connection.dialect.server_version_info
+    except Exception as error:  # noqa: BLE001 - 어떤 드라이버 오류든 안내로 바꿔 다시 던진다
+        raise ConnectionError(f"{error}\n  → {diagnose(str(error))}") from error
+
+    label = engine.dialect.name
+    if version:
+        label = f"{label} {'.'.join(str(part) for part in version[:2])}"
+    return label
+
+
 def _row_count(engine: Engine, table: Table) -> int:
     """테이블 행수를 센다.
 
@@ -227,6 +303,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     source = get_engine(resolve_database_url(args.source))
     target = get_engine(target_url)
     logger.info("발행 대상: %s", mask_url(str(target.url)))
+
+    try:
+        logger.info("연결 확인: %s", preflight(target))
+    except ConnectionError as error:
+        logger.error("대상에 닿지 않아 발행하지 않았습니다.\n  %s", error)
+        return 3
 
     try:
         publish(source, target, batch_size=args.batch_size)

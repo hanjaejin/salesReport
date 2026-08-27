@@ -201,28 +201,37 @@ python -m src.load.pipeline --from 20250701 --to 20260731
 
 ```bash
 # 대상 URL은 환경변수로 준다 — 명령행에 적으면 셸 이력에 비밀번호가 남는다
-export POS_BRIEFING_TARGET_URL="postgresql://postgres.<ref>:<password>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+export POS_BRIEFING_TARGET_URL="postgresql://postgres.<ref>:<password>@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres"
 python -m src.load.publish
 ```
 
 ```powershell
 # Windows / PowerShell
-$env:POS_BRIEFING_TARGET_URL = "postgresql://postgres.<ref>:<password>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+$env:POS_BRIEFING_TARGET_URL = "postgresql://postgres.<ref>:<password>@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres"
 python -m src.load.publish
 ```
 
 스키마 생성부터 적재까지 이 한 줄로 끝난다. 옮기는 것은 **132,789행**(마트 3종 + 브리핑 + 점포)이고,
 원장 463,544건은 보내지 않는다 — 화면이 읽지 않고, 필요하면 로컬에서 되살릴 수 있기 때문이다.
 
-> ⚠️ 연결 문자열은 Supabase 대시보드의 **Session pooler**(포트 **5432**)를 쓴다.
+> ⚠️ 연결 문자열은 **직접 적지 말고** Supabase 대시보드 상단 **[Connect] → Session pooler**
+> (포트 **5432**)의 문자열을 그대로 복사한다. 아래 두 가지가 실제로 발목을 잡았다.
+>
+> | 함정 | 증상 | 해결 |
+> |---|---|---|
+> | Direct connection(`db.<ref>.supabase.co`) | 호스트 이름이 아예 풀리지 않음 | IPv6 전용이라 IPv4 망에서는 못 쓴다 — 풀러 주소를 쓴다 |
+> | 풀러 접두사 `aws-0`/`aws-1` | `tenant/user ... not found` | **프로젝트마다 다르다.** 비밀번호 문제가 아니다 |
+>
 > Transaction pooler(6543)는 준비된 구문을 지원하지 않아 대량 적재에서 실패한다.
+> `publish`는 복사를 시작하기 전에 연결을 먼저 확인하고, 위 증상을 만나면
+> 무엇을 고쳐야 하는지 한 줄로 알려 준다 (10초 안에 포기한다).
 
 ### 3. Streamlit Cloud 설정
 
 앱 설정의 **Secrets**에 한 줄을 넣는다.
 
 ```toml
-POS_BRIEFING_DB_URL = "postgresql://postgres.<ref>:<password>@aws-0-ap-northeast-2.pooler.supabase.com:5432/postgres"
+POS_BRIEFING_DB_URL = "postgresql://postgres.<ref>:<password>@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres"
 ```
 
 이 값이 없으면 앱은 로컬 `data/pos_mockup.db`로 떨어지므로, 로컬 개발은 설정 없이 그대로 된다.

@@ -27,6 +27,10 @@ DB_PATH: Final[Path] = DATA_DIR / "pos_mockup.db"
 #: 연결 URL을 덮어쓰는 환경변수. 원격 PostgreSQL(Supabase)로 옮길 때 쓴다 (ADR-0011).
 DB_URL_ENV: Final[str] = "POS_BRIEFING_DB_URL"
 
+#: 원격 연결을 기다리다 포기하는 시간(초).
+#: 닿지 않는 호스트를 준 경우 무한정 매달리지 않고 진단을 내놓게 하는 장치다 (ADR-0011).
+CONNECT_TIMEOUT_SEC: Final[int] = 10
+
 #: 씨앗에서 추출해 동결한 상품 사전 (ADR-0002)
 SEED_CATALOG_PATH: Final[Path] = PROJECT_ROOT / "src" / "generate" / "seed_catalog.json"
 
@@ -82,6 +86,23 @@ def resolve_database_url(target: Path | str | None = None) -> str:
     return f"sqlite:///{Path(text)}"
 
 
+def _connect_args(url: str) -> dict[str, object]:
+    """연결 URL에 맞는 드라이버 인자를 고른다.
+
+    SQLite는 파일이라 대기할 상대가 없고, 드라이버가 모르는 키를 주면 오류가 난다.
+    원격에만 대기 상한을 건다.
+
+    Args:
+        url: SQLAlchemy 연결 URL.
+
+    Returns:
+        ``create_engine(connect_args=...)`` 에 넘길 사전. SQLite면 빈 사전.
+    """
+    if url.startswith("sqlite"):
+        return {}
+    return {"connect_timeout": CONNECT_TIMEOUT_SEC}
+
+
 def get_engine(target: Path | str | None = None, *, echo: bool = False) -> Engine:
     """DB 엔진을 만든다 (SQLite·PostgreSQL 공통).
 
@@ -105,7 +126,13 @@ def get_engine(target: Path | str | None = None, *, echo: bool = False) -> Engin
         Path(url.removeprefix("sqlite:///")).parent.mkdir(parents=True, exist_ok=True)
         return create_engine(url, echo=echo)
 
-    return create_engine(url, echo=echo, pool_pre_ping=True, pool_recycle=300)
+    return create_engine(
+        url,
+        echo=echo,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        connect_args=_connect_args(url),
+    )
 
 
 def is_sqlite(engine: Engine) -> bool:
