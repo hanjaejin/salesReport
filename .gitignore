@@ -24,6 +24,11 @@ data/*.txt
 data/report/
 *.xlsx.tmp
 
+# 비밀 — 연결 문자열은 저장소에 절대 올라가지 않는다 (ADR-0011)
+.env
+.env.*
+.streamlit/secrets.toml
+
 # 편집기
 .vscode/
 .idea/
