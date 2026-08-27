@@ -78,26 +78,6 @@ def _validate_period(from_date: str, to_date: str) -> list[str]:
     return date_range(from_date, to_date)
 
 
-def _to_records(frame: pd.DataFrame) -> list[dict[str, object]]:
-    """DataFrame을 SQLAlchemy가 바인딩할 수 있는 순수 파이썬 값으로 바꾼다.
-
-    numpy 스칼라(``int64`` 등)는 SQLite 드라이버가 그대로 받지 못한다.
-    ``Series.tolist()`` 가 컬럼 단위로 파이썬 기본형으로 되돌려 준다
-    (행 단위 반복 없음).
-
-    Args:
-        frame: 변환할 프레임.
-
-    Returns:
-        ``executemany`` 에 넘길 딕셔너리 리스트.
-    """
-    columns = list(frame.columns)
-    # 결측(NaN/NaT/pd.NA)은 전부 None으로 — TEXT 컬럼에 nan 문자열이 들어가지 않게.
-    cleaned = frame.astype(object).where(pd.notna(frame), None)
-    column_values = [cleaned[column].tolist() for column in columns]
-    return [dict(zip(columns, row, strict=True)) for row in zip(*column_values, strict=True)]
-
-
 def _insert_chunks(
     engine: Engine, table: Table, chunks: Iterator[pd.DataFrame], label: str
 ) -> int:
@@ -117,7 +97,7 @@ def _insert_chunks(
         if chunk.empty:
             continue
         with engine.begin() as connection:
-            connection.execute(table.insert(), _to_records(chunk))
+            connection.execute(table.insert(), schema.to_records(chunk))
         total += len(chunk)
         logger.debug("%s 청크 적재 %d행 (누적 %d행)", label, len(chunk), total)
     return total
@@ -171,7 +151,7 @@ def _load_stores(engine: Engine, extractor: ReceiptExtractor) -> int:
                 schema.DIM_STORE.c.DEPT_CD.in_(frame["DEPT_CD"].tolist())
             )
         )
-        connection.execute(schema.DIM_STORE.insert(), _to_records(frame))
+        connection.execute(schema.DIM_STORE.insert(), schema.to_records(frame))
     return len(frame)
 
 
@@ -282,13 +262,15 @@ def load_period(
     to_date: str,
     engine: Engine | None = None,
 ) -> LoadResult:
-    """[삭제→적재→대사]를 날짜 단위 멱등으로 수행한다 (명세 8장).
+    """[삭제→적재→집계→브리핑]을 날짜 단위 멱등으로 수행한다 (명세 8장).
 
     1) FACT 3종에서 기간 DELETE
     2) 청크 INSERT
-    3) 일자별 대사 로그
+    3) 기간의 MART 3종 재계산
+    4) 기간의 BRIEFING_DAILY 재생성
 
-    마트 재계산과 브리핑 재생성(명세 8장 3·4단계)은 M4에서 이 함수에 붙는다.
+    브리핑 문장까지 여기서 완성돼 DB에 저장된다. 화면은 저장된 글자를 표시만 한다
+    (불변식 7 — 서버측 생성 원칙).
 
     Args:
         extractor: 원천 Extractor (합성이든 Oracle이든 계약만 지키면 된다).
@@ -302,6 +284,7 @@ def load_period(
     Raises:
         ValueError: 기간 인자가 잘못됐을 때.
     """
+    from src.mart import aggregate, briefing
     started = time.perf_counter()
     dates = _validate_period(from_date, to_date)
     engine = engine if engine is not None else get_engine()
@@ -334,6 +317,9 @@ def load_period(
     )
 
     _log_reconciliation(reconcile(engine, from_date, to_date))
+
+    aggregate.build_marts(engine, from_date, to_date, dept_cds)
+    briefing.build_briefings(engine, from_date, to_date, dept_cds)
 
     result = LoadResult(
         receipts=receipts,

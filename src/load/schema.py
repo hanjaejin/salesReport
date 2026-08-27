@@ -11,6 +11,7 @@ SQLAlchemy Core ``Table`` 객체로 정의하는 이유는 후속 모듈(pipelin
 
 from __future__ import annotations
 
+import pandas as pd
 from sqlalchemy import (
     Column,
     Engine,
@@ -186,3 +187,23 @@ def drop_all(engine: Engine) -> None:
         engine: 대상 SQLAlchemy 엔진.
     """
     metadata.drop_all(engine, checkfirst=True)
+
+
+def to_records(frame: pd.DataFrame) -> list[dict[str, object]]:
+    """DataFrame을 Core INSERT가 바인딩할 수 있는 순수 파이썬 값으로 바꾼다.
+
+    numpy 스칼라(``int64`` 등)는 SQLite 드라이버가 그대로 받지 못한다.
+    ``Series.tolist()`` 가 컬럼 단위로 파이썬 기본형으로 되돌려 준다 (행 단위 반복 없음).
+    결측(NaN/NaT/pd.NA)은 전부 ``None`` 으로 정규화한다 — TEXT 컬럼에 ``nan`` 문자열이
+    들어가는 사고를 막기 위해서다.
+
+    Args:
+        frame: 변환할 프레임. 컬럼명이 대상 테이블과 같아야 한다.
+
+    Returns:
+        ``executemany`` 에 넘길 딕셔너리 리스트.
+    """
+    columns = list(frame.columns)
+    cleaned = frame.astype(object).where(pd.notna(frame), None)
+    column_values = [cleaned[column].tolist() for column in columns]
+    return [dict(zip(columns, row, strict=True)) for row in zip(*column_values, strict=True)]
