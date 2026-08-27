@@ -69,11 +69,27 @@ LINE2_STOCK_TEMPLATES: dict[str, str] = {
 #: 3줄은 정확성 우선으로 단일 문형을 유지한다 (명세 7.4).
 #: ``{support_particle}`` 은 명세의 고정 조사 "는"을 대신한다 — 보조어가
 #: "1인당 구매액"일 때 "구매액는"이라는 비문이 화면에 나오기 때문이다 (ADR-0007 결정 3).
-LINE3_G4_TEMPLATE = (
-    "그저께와 비교하면, {subject_name}({subject_pct}%) 영향이 컸어요 — "
-    "{support_name}{support_particle} {support_pct}%였어요"
+#: 금액을 함께 말한다 — "1인당 구매액은 13.2%였어요" 는 금액을 백분율로
+#: 서술하는 비문이었다 (ADR-0014). 증감은 부호가 아니라 말로 알린다.
+#: 3줄 앞머리는 두 형태가 공유한다 (1줄이 접두를 공유하는 것과 같은 방식).
+_LINE3_HEAD = (
+    "그저께와 비교하면, {subject_name}({subject_amt:,}{subject_unit}, {subject_pct}%) 영향이 컸어요 — "
+    "{support_name}{support_particle} {support_amt:,}{support_unit}으로 "
 )
+
+#: 보조어가 움직였는지에 따라 뒷말이 갈린다. 변화가 없으면 백분율을 말하지 않는다 —
+#: "0.0% 같았어요" 는 군더더기이고, 반올림 때문에 0.0이 된 값에 대해 정직하지도 않다.
+LINE3_G4_TEMPLATES: dict[str, str] = {
+    "change": _LINE3_HEAD + "{support_pct_abs}% {support_direction}",
+    "flat": _LINE3_HEAD + "그저께와 거의 같았어요",
+}
 LINE3_SILENT = "특별한 신호는 없어요"
+
+#: 신호 값의 단위 (ADR-0014). "원"·"명" 모두 받침이 있어 뒤 조사는 "으로"로 같다.
+SIGNAL_UNITS: dict[str, str] = {"cnt": "명", "ticket": "원"}
+
+#: 증감 방향 문구. 부호와 "줄었어요"가 겹치지 않도록 백분율은 절댓값으로 넣는다.
+SIGNAL_DIRECTIONS: dict[str, str] = {"rise": "늘었어요", "fall": "줄었어요"}
 
 #: 신호 카드의 주어 후보 (명세 7.4). 전문용어 대신 쉬운 말을 쓴다 (명세 14장).
 SIGNAL_LABELS: dict[str, str] = {"cnt": "손님 수", "ticket": "1인당 구매액"}
@@ -193,18 +209,26 @@ def find_stock_risk(stock: pd.DataFrame) -> dict[str, Any]:
     }
 
 
-def pick_signal(cnt_diff_pct: float | None, ticket_diff_pct: float | None) -> dict[str, Any]:
+def pick_signal(
+    cnt_diff_pct: float | None,
+    ticket_diff_pct: float | None,
+    deal_cnt: int,
+    avg_ticket: int,
+) -> dict[str, Any]:
     """G4 문장의 주어·보조어를 정한다 (명세 7.4: 절댓값 큰 쪽이 주어).
 
-    비교와 절댓값은 **여기서** 끝난다. 문장 계층은 결과만 치환한다 (불변식 1).
+    비교·절댓값·방향 판정은 **여기서** 끝난다. 문장 계층은 결과만 치환한다 (불변식 1).
+    금액도 함께 담는다 — 백분율만 말하면 "구매액은 13.2%" 라는 비문이 된다 (ADR-0014).
 
     Args:
         cnt_diff_pct: 손님 수 증감률 (전일 대비).
         ticket_diff_pct: 1인당 구매액 증감률 (전일 대비).
+        deal_cnt: 어제 손님 수 (반올림 완료된 값).
+        avg_ticket: 어제 1인당 구매액 (반올림 완료된 값).
 
     Returns:
-        ``subject_name``·``subject_pct``·``support_name``·``support_particle``·
-        ``support_pct`` 를 담은 치환용 딕셔너리.
+        주어·보조어의 이름·금액·단위·백분율과, 보조어의 조사·절댓값·방향 문구를
+        담은 치환용 딕셔너리.
     """
     counts = 0.0 if cnt_diff_pct is None else cnt_diff_pct
     tickets = 0.0 if ticket_diff_pct is None else ticket_diff_pct
@@ -212,13 +236,25 @@ def pick_signal(cnt_diff_pct: float | None, ticket_diff_pct: float | None) -> di
     # 동률이면 건수를 주어로 삼는다 (명세 7.4가 "건수·객단가" 순으로 적었다).
     subject_key, support_key = ("cnt", "ticket") if abs(counts) >= abs(tickets) else ("ticket", "cnt")
     values = {"cnt": counts, "ticket": tickets}
+    amounts = {"cnt": deal_cnt, "ticket": avg_ticket}
+
+    support_pct = values[support_key]
+    shape = "flat" if support_pct == 0 else "change"
+    direction = "rise" if support_pct > 0 else "fall"
 
     return {
+        "support_shape": shape,
         "subject_name": SIGNAL_LABELS[subject_key],
+        "subject_amt": amounts[subject_key],
+        "subject_unit": SIGNAL_UNITS[subject_key],
         "subject_pct": values[subject_key],
         "support_name": SIGNAL_LABELS[support_key],
         "support_particle": SIGNAL_PARTICLES[support_key],
-        "support_pct": values[support_key],
+        "support_amt": amounts[support_key],
+        "support_unit": SIGNAL_UNITS[support_key],
+        "support_pct": support_pct,
+        "support_pct_abs": abs(support_pct),
+        "support_direction": SIGNAL_DIRECTIONS[direction],
     }
 
 
@@ -357,7 +393,7 @@ def render_line3(card: dict[str, Any] | None) -> str:
     """
     if card is None:
         return LINE3_SILENT
-    return LINE3_G4_TEMPLATE.format(**card["lines"])
+    return LINE3_G4_TEMPLATES[card["lines"]["support_shape"]].format(**card["lines"])
 
 
 # --- 계산 계층 -------------------------------------------------------------
@@ -500,7 +536,7 @@ def build_payload(
     ticket_diff_pct = _pct_change(avg_ticket, prev_ticket) if prev_row is not None else None
 
     peak_block = _peak_block(hourly_amounts, sale_amt)
-    signal = pick_signal(cnt_diff_pct, ticket_diff_pct)
+    signal = pick_signal(cnt_diff_pct, ticket_diff_pct, deal_cnt, avg_ticket)
     block_lines = {
         "block_name": peak_block["name"],
         "block_range": peak_block["range"],

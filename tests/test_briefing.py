@@ -212,15 +212,23 @@ def test_line3_when_g4_fires() -> None:
         "card_id": "G4",
         "lines": {
             "subject_name": "손님 수",
+            "subject_amt": 929,
+            "subject_unit": "명",
             "subject_pct": 8.0,
             "support_name": "1인당 구매액",
             "support_particle": "은",
+            "support_amt": 3229,
+            "support_unit": "원",
             "support_pct": -3.1,
+            "support_pct_abs": 3.1,
+            "support_direction": "줄었어요",
+            "support_shape": "change",
         },
     }
 
     assert briefing.render_line3(card) == (
-        "그저께와 비교하면, 손님 수(8.0%) 영향이 컸어요 — 1인당 구매액은 -3.1%였어요"
+        "그저께와 비교하면, 손님 수(929명, 8.0%) 영향이 컸어요 — "
+        "1인당 구매액은 3,229원으로 3.1% 줄었어요"
     )
 
 
@@ -229,13 +237,14 @@ def test_line3_particle_agrees_with_support_word() -> None:
 
     받침 유무에 따라 은/는을 계산 계층에서 골라 두므로 비문이 나오지 않는다.
     """
-    assert briefing.pick_signal(9.0, 1.0)["support_particle"] == "은"  # 보조어=1인당 구매액
-    assert briefing.pick_signal(1.0, 9.0)["support_particle"] == "는"  # 보조어=손님 수
+    ticket_support = briefing.pick_signal(9.0, 1.0, deal_cnt=929, avg_ticket=3229)
+    cnt_support = briefing.pick_signal(1.0, 9.0, deal_cnt=929, avg_ticket=3229)
 
-    line = briefing.render_line3(
-        {"card_id": "G4", "lines": briefing.pick_signal(1.0, 9.0)}
-    )
-    assert line.endswith("손님 수는 1.0%였어요")
+    assert ticket_support["support_particle"] == "은"  # 보조어=1인당 구매액
+    assert cnt_support["support_particle"] == "는"  # 보조어=손님 수
+
+    line = briefing.render_line3({"card_id": "G4", "lines": cnt_support})
+    assert line.endswith("손님 수는 929명으로 1.0% 늘었어요")
 
 
 def test_line3_when_g4_silent() -> None:
@@ -245,13 +254,17 @@ def test_line3_when_g4_silent() -> None:
 
 def test_g4_subject_is_the_larger_absolute_change() -> None:
     """명세 7.4: 건수·1인당 구매액 중 절댓값이 큰 쪽이 주어가 된다."""
-    signal = briefing.pick_signal(cnt_diff_pct=3.0, ticket_diff_pct=-9.5)
+    signal = briefing.pick_signal(
+        cnt_diff_pct=3.0, ticket_diff_pct=-9.5, deal_cnt=929, avg_ticket=3229
+    )
     assert signal["subject_name"] == "1인당 구매액"
     assert signal["subject_pct"] == -9.5
     assert signal["support_name"] == "손님 수"
     assert signal["support_pct"] == 3.0
 
-    reversed_signal = briefing.pick_signal(cnt_diff_pct=-9.5, ticket_diff_pct=3.0)
+    reversed_signal = briefing.pick_signal(
+        cnt_diff_pct=-9.5, ticket_diff_pct=3.0, deal_cnt=929, avg_ticket=3229
+    )
     assert reversed_signal["subject_name"] == "손님 수"
 
 
@@ -261,7 +274,7 @@ def test_no_forbidden_jargon_in_templates() -> None:
         [
             *briefing.LINE1_TEMPLATES.values(),
             *briefing.LINE2_TEMPLATES.values(),
-            briefing.LINE3_G4_TEMPLATE,
+            *briefing.LINE3_G4_TEMPLATES.values(),
             briefing.LINE3_SILENT,
         ]
     )
@@ -276,7 +289,7 @@ def test_no_cause_assertion_in_templates() -> None:
         [
             *briefing.LINE1_TEMPLATES.values(),
             *briefing.LINE2_TEMPLATES.values(),
-            briefing.LINE3_G4_TEMPLATE,
+            *briefing.LINE3_G4_TEMPLATES.values(),
             briefing.LINE3_SILENT,
         ]
     )
@@ -529,3 +542,80 @@ def test_store_m_fires_lunch_g2(built_engine: Engine) -> None:
     payload = _payload(built_engine, TO_DATE, "901002")
 
     assert payload["peak_block"]["name"] == "점심"
+
+
+# --- 3줄 금액 표기 (ADR-0014) ------------------------------------------------
+
+
+def test_line3_shows_amount_next_to_percent() -> None:
+    """3줄이 백분율만이 아니라 **금액**도 말한다.
+
+    "1인당 구매액은 13.2%였어요" 는 금액을 백분율로 서술하는 비문이었다.
+    """
+    signal = briefing.pick_signal(
+        cnt_diff_pct=14.7, ticket_diff_pct=13.2, deal_cnt=929, avg_ticket=3229
+    )
+
+    line = briefing.render_line3({"card_id": "G4", "lines": signal})
+
+    assert "3,229원" in line
+    assert "929명" in line
+    assert "13.2%" in line
+
+
+def test_line3_says_direction_in_words() -> None:
+    """증감을 부호가 아니라 말로 알린다 — "-4.1% 줄었어요" 같은 겹말을 막는다."""
+    rose = briefing.pick_signal(
+        cnt_diff_pct=14.7, ticket_diff_pct=13.2, deal_cnt=929, avg_ticket=3229
+    )
+    fell = briefing.pick_signal(
+        cnt_diff_pct=14.7, ticket_diff_pct=-4.1, deal_cnt=929, avg_ticket=3229
+    )
+    flat = briefing.pick_signal(
+        cnt_diff_pct=14.7, ticket_diff_pct=0.0, deal_cnt=929, avg_ticket=3229
+    )
+
+    assert "13.2% 늘었어요" in briefing.render_line3({"card_id": "G4", "lines": rose})
+    fell_line = briefing.render_line3({"card_id": "G4", "lines": fell})
+    assert "4.1% 줄었어요" in fell_line
+    assert "-4.1%" not in fell_line
+    assert "같았어요" in briefing.render_line3({"card_id": "G4", "lines": flat})
+
+
+def test_line3_units_follow_the_subject() -> None:
+    """손님 수는 '명', 1인당 구매액은 '원' 을 쓴다."""
+    ticket_subject = briefing.pick_signal(
+        cnt_diff_pct=2.1, ticket_diff_pct=13.2, deal_cnt=929, avg_ticket=3229
+    )
+
+    line = briefing.render_line3({"card_id": "G4", "lines": ticket_subject})
+
+    assert line.startswith("그저께와 비교하면, 1인당 구매액(3,229원, 13.2%)")
+    assert "손님 수는 929명으로 2.1% 늘었어요" in line
+
+
+def test_line3_amounts_come_from_json_not_the_template() -> None:
+    """금액은 계산 계층이 넣어 준 값이다 — 문장 계층은 치환만 한다 (불변식 1)."""
+    signal = briefing.pick_signal(
+        cnt_diff_pct=1.0, ticket_diff_pct=9.0, deal_cnt=351, avg_ticket=3370
+    )
+
+    assert signal["subject_amt"] == 3370
+    assert signal["support_amt"] == 351
+    assert signal["subject_unit"] == "원"
+    assert signal["support_unit"] == "명"
+
+
+def test_line3_flat_support_drops_the_percent() -> None:
+    """변화가 없으면 백분율을 말하지 않는다 — "0.0% 같았어요" 는 군더더기다.
+
+    1줄이 ``flat`` 형태를 따로 두는 것과 같은 방식이다 (명세 7.4).
+    """
+    flat = briefing.pick_signal(
+        cnt_diff_pct=16.0, ticket_diff_pct=0.0, deal_cnt=70, avg_ticket=3189
+    )
+
+    line = briefing.render_line3({"card_id": "G4", "lines": flat})
+
+    assert "0.0%" not in line
+    assert line.endswith("1인당 구매액은 3,189원으로 그저께와 거의 같았어요")
