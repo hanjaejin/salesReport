@@ -623,6 +623,23 @@ def group_avg_ticket(total_sale_amt: int, total_deal_cnt: int) -> int:
     return round(total_sale_amt / total_deal_cnt)
 
 
+def share_pct(part: int, whole: int) -> float:
+    """전체에서 차지하는 비중을 소수 1자리로 구한다 (부록 B.10).
+
+    반올림을 **여기서** 끝낸다 — 화면은 치환만 한다 (불변식 1).
+
+    Args:
+        part: 부분 값.
+        whole: 전체 값.
+
+    Returns:
+        비중(%). 전체가 0이면 0.0.
+    """
+    if whole == 0:
+        return 0.0
+    return round(part / whole * 100, 1)
+
+
 def group_status(payload: dict[str, Any]) -> tuple[str, str]:
     """매장 하나의 상태와 라벨을 정한다 (부록 B.5·B.6).
 
@@ -706,6 +723,9 @@ def build_group_payload(saledate: str, payloads: Sequence[dict[str, Any]]) -> di
 
     total_sale_amt = sum(row["sale_amt"] for row in rows)
     total_deal_cnt = sum(row["deal_cnt"] for row in rows)
+    for row in rows:
+        row["share_pct"] = share_pct(row["sale_amt"], total_sale_amt)
+
     attention = pick_attention(rows)
 
     return {

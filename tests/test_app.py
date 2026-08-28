@@ -579,3 +579,76 @@ def test_group_view_button_opens_that_store(built_engine: Engine) -> None:
     assert app_test.sidebar.radio[0].value == main.VIEW_MODES[0]
     assert app_test.session_state[main.STORE_PICK_KEY] == "901003"
     assert "간이역 소형점" in " ".join(block.value for block in app_test.markdown)
+
+
+# --- 부록 B.10: 보고서 자료 로더 ---------------------------------------------
+
+
+def test_group_trend_covers_all_stores(built_engine: Engine) -> None:
+    """부록 B.10: 매출 흐름은 세 매장을 한 프레임에 담는다 (그래프 1개로 겹쳐 본다)."""
+    from src.app import main
+
+    trend = main.load_group_trend(built_engine, SALEDATE, days=5)
+
+    assert list(trend.columns) == ["중앙역 대형점", "동부역 중형점", "간이역 소형점"]
+    assert trend.index.name == "날짜"
+    assert len(trend) <= 5
+
+
+def test_group_hourly_covers_all_stores(built_engine: Engine) -> None:
+    """부록 B.10: 시간대 비교도 매장별 열로 온다."""
+    from src.app import main
+
+    hourly = main.load_group_hourly(built_engine, SALEDATE)
+
+    assert len(hourly.columns) == 3
+    assert not hourly.empty
+
+
+def test_group_top_items_are_limited_per_store(built_engine: Engine) -> None:
+    """부록 B.10: 매장별 TOP3 만 보여 준다."""
+    from src.app import main
+
+    top = main.load_group_top_items(built_engine, SALEDATE, limit=3)
+
+    assert set(top["매장"]).issubset({"중앙역 대형점", "동부역 중형점", "간이역 소형점"})
+    for _, group in top.groupby("매장"):
+        assert len(group) <= 3
+
+
+def test_period_summary_matches_mart(built_engine: Engine) -> None:
+    """부록 B.12: 기간 집계가 마트 SUM과 일치한다."""
+    from sqlalchemy import func
+
+    from src.app import main
+
+    summary = main.load_period_summary(built_engine, SALEDATE, days=3)
+
+    table = schema.MART_DAY_STORE
+    with built_engine.connect() as connection:
+        expected = connection.execute(
+            select(func.sum(table.c.SALE_AMT)).where(
+                table.c.SALEDATE.between("20260701", SALEDATE)
+            )
+        ).scalar_one()
+
+    assert summary["sale_amt"] == expected
+
+
+def test_period_summary_handles_missing_prior(built_engine: Engine) -> None:
+    """부록 B.12: 직전 같은 기간이 없으면 대비를 비운다 — 없는 비교를 지어내지 않는다."""
+    from src.app import main
+
+    dates = main.load_available_dates(built_engine, DEPT_CD)
+    summary = main.load_period_summary(built_engine, dates[0], days=3)
+
+    assert summary["prev_diff_pct"] is None
+
+
+def test_period_summary_stores_match_total(built_engine: Engine) -> None:
+    """매장별 기간 합계의 합이 전체 기간 합계와 같다."""
+    from src.app import main
+
+    summary = main.load_period_summary(built_engine, SALEDATE, days=3)
+
+    assert summary["sale_amt"] == sum(row["sale_amt"] for row in summary["stores"])

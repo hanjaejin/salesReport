@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 
@@ -228,3 +229,85 @@ def test_stock_sheet_omits_order_quantity(built_engine: Engine, tmp_path: Path) 
     )
     for forbidden in ("발주", "권고", "적정재고", "리드타임"):
         assert forbidden not in texts
+
+
+# --- 부록 B.11: 여러 매장 보고서 ---------------------------------------------
+
+
+def test_group_report_has_expected_sheets(built_engine: Engine) -> None:
+    """부록 B.11: 시트 4종."""
+    from openpyxl import load_workbook
+
+    from src.report import group_report
+
+    book = load_workbook(io.BytesIO(group_report.report_bytes(built_engine, SALEDATE)))
+
+    assert book.sheetnames == ["요약", "매장별", "기간", "시간대"]
+
+
+def test_group_report_numbers_match_screen(built_engine: Engine) -> None:
+    """부록 B.11: 보고서 숫자가 화면 숫자와 같다 — 같은 원천에서 만든다."""
+    from openpyxl import load_workbook
+
+    from src.app import main
+    from src.report import group_report
+
+    payload = main.load_group_briefing(built_engine, SALEDATE)
+    book = load_workbook(io.BytesIO(group_report.report_bytes(built_engine, SALEDATE)))
+    summary = {
+        row[0]: row[1]
+        for row in book[group_report.SHEET_SUMMARY].iter_rows(values_only=True)
+        if row[0]
+    }
+
+    assert summary["합계 매출"] == payload["total_sale_amt"]
+    assert summary["합계 손님"] == payload["total_deal_cnt"]
+    assert summary["1인당"] == payload["group_avg_ticket"]
+
+
+def test_group_report_lists_every_store(built_engine: Engine) -> None:
+    """매장별 시트에 세 매장이 모두 들어간다."""
+    from openpyxl import load_workbook
+
+    from src.report import group_report
+
+    book = load_workbook(io.BytesIO(group_report.report_bytes(built_engine, SALEDATE)))
+    text = " ".join(
+        str(cell)
+        for row in book["매장별"].iter_rows(values_only=True)
+        for cell in row
+        if isinstance(cell, str)
+    )
+
+    for name in ("중앙역 대형점", "동부역 중형점", "간이역 소형점"):
+        assert name in text
+
+
+def test_group_report_shows_no_jargon(built_engine: Engine) -> None:
+    """부록 B.12: 보고서에도 전문용어가 없다 (명세 14장)."""
+    from openpyxl import load_workbook
+
+    from src.report import group_report
+
+    book = load_workbook(io.BytesIO(group_report.report_bytes(built_engine, SALEDATE)))
+    text = " ".join(
+        str(cell)
+        for sheet in book.worksheets
+        for row in sheet.iter_rows(values_only=True)
+        for cell in row
+        if isinstance(cell, str)
+    )
+
+    for word in ("객단가", "증감률", "AI", "LLM", "분석", "예측", "결품", "소진일수"):
+        assert word not in text
+    assert "목업" in text
+
+
+def test_group_report_missing_day_raises(built_engine: Engine) -> None:
+    """없는 날짜는 조용히 빈 파일을 만들지 않고 알린다 (빈 except 금지)."""
+    import pytest as _pytest
+
+    from src.report import group_report
+
+    with _pytest.raises(LookupError):
+        group_report.report_bytes(built_engine, "20991231")

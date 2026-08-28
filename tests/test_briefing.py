@@ -744,3 +744,17 @@ def test_group_status_text_uses_no_jargon(built_engine: Engine) -> None:
 
     for word in ("객단가", "증감률", "결품", "리드타임", "소진", "발주", "분석", "예측"):
         assert word not in texts
+
+
+def test_group_share_pct_sums_to_hundred(built_engine: Engine) -> None:
+    """부록 B.10: 매장 비중 합계가 100%에 수렴한다 (반올림 오차 허용)."""
+    shares = [row["share_pct"] for row in _group(built_engine)["stores"]]
+
+    assert abs(sum(shares) - 100.0) <= 0.3
+
+
+def test_group_share_pct_is_zero_without_sales() -> None:
+    """부록 B.10: 매출이 0원이면 비중은 0이다 (0 나눗셈 없음)."""
+    assert briefing.share_pct(0, 0) == 0.0
+    assert briefing.share_pct(100, 0) == 0.0
+    assert briefing.share_pct(25, 200) == 12.5

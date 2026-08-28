@@ -57,6 +57,12 @@ PENDING_KEYS: dict[str, str] = {
 GROUP_TOTAL_LABEL = "합계"
 GROUP_EMPTY_STATE = "이 날짜의 요약이 아직 없어요. 다른 날짜를 선택해 주세요"
 
+#: 직전 같은 기간이 없을 때의 표시 (부록 B.10) — 없는 비교를 지어내지 않는다.
+PERIOD_NO_BASELINE = "비교할 지난 기간이 없어요"
+
+#: 요일 기준선이 없을 때의 표시 (명세 7.4 폴백과 같은 태도).
+DOW_NO_BASELINE = "평소와 견줄 자료가 아직 부족해요"
+
 #: 피드백 버튼 (명세 9장) — "괜찮아요"는 거절이 아니라 사양의 어휘다
 FEEDBACK_ACTIONS: dict[str, str] = {"확인했어요": "ACCEPT", "괜찮아요": "DECLINE"}
 
@@ -65,6 +71,12 @@ TREND_DAYS = 14
 
 #: 관리자 재생성 구간 길이 (명세 9장 "최근 7일 재생성")
 ADMIN_REGEN_DAYS = 7
+
+#: 보고서의 매장별 상품 표시 수 (부록 B.10).
+GROUP_TOP_ITEMS = 3
+
+#: 보고서 기간 집계 기본 일수 (부록 B.10).
+PERIOD_DAYS = 7
 
 
 # --- 데이터 접근: 저장된 것을 읽기만 한다 -----------------------------------
@@ -205,6 +217,200 @@ def load_group_briefing(engine: Engine, saledate: str) -> dict[str, Any] | None:
         ).scalar_one_or_none()
 
     return json.loads(raw) if raw is not None else None
+
+
+def _store_names(engine: Engine) -> dict[str, str]:
+    """점포코드 → 점포명 (그래프 범례에 코드가 아니라 이름이 뜨게 한다).
+
+    Args:
+        engine: 대상 엔진.
+
+    Returns:
+        점포코드를 키로 하는 이름 사전 (코드 오름차순).
+    """
+    stores = load_stores(engine)
+    return dict(zip(stores["DEPT_CD"], stores["DEPT_NM"], strict=True))
+
+
+def load_group_trend(
+    engine: Engine, saledate: str, days: int = TREND_DAYS
+) -> pd.DataFrame:
+    """최근 N일 매장별 매출 흐름을 읽는다 (부록 B.10).
+
+    집계는 DB가, 모양 바꾸기는 여기서 끝낸다 — 화면은 그리기만 한다.
+
+    Args:
+        engine: 대상 엔진.
+        saledate: 기준일 ``YYYYMMDD``.
+        days: 거슬러 볼 일수 (기준일 포함).
+
+    Returns:
+        날짜를 인덱스로, 매장명을 열로 갖는 프레임.
+    """
+    table = schema.MART_DAY_STORE
+    start = shift_days(saledate, 0 - days + 1)
+
+    with engine.connect() as connection:
+        frame = pd.read_sql(
+            select(table.c.SALEDATE, table.c.DEPT_CD, table.c.SALE_AMT)
+            .where(table.c.SALEDATE.between(start, saledate))
+            .order_by(table.c.SALEDATE, table.c.DEPT_CD),
+            connection,
+        )
+
+    names = _store_names(engine)
+    wide = frame.pivot(index="SALEDATE", columns="DEPT_CD", values="SALE_AMT")
+    wide = wide.reindex(columns=list(names)).rename(columns=names)
+    wide.index = [format_display_date(value) for value in wide.index]
+    wide.index.name = "날짜"
+    return wide
+
+
+def load_group_hourly(engine: Engine, saledate: str) -> pd.DataFrame:
+    """기준일의 매장별 시간대 매출을 읽는다 (부록 B.10).
+
+    Args:
+        engine: 대상 엔진.
+        saledate: ``YYYYMMDD``.
+
+    Returns:
+        시간을 인덱스로, 매장명을 열로 갖는 프레임.
+    """
+    table = schema.MART_HOUR_STORE
+
+    with engine.connect() as connection:
+        frame = pd.read_sql(
+            select(table.c.HOUR, table.c.DEPT_CD, table.c.SALE_AMT)
+            .where(table.c.SALEDATE == saledate)
+            .order_by(table.c.HOUR, table.c.DEPT_CD),
+            connection,
+        )
+
+    names = _store_names(engine)
+    wide = frame.pivot(index="HOUR", columns="DEPT_CD", values="SALE_AMT")
+    wide = wide.reindex(columns=list(names)).rename(columns=names).fillna(0)
+    wide.index = [f"{hour}시" for hour in wide.index]
+    wide.index.name = "시간"
+    return wide
+
+
+def load_group_top_items(
+    engine: Engine, saledate: str, limit: int = GROUP_TOP_ITEMS
+) -> pd.DataFrame:
+    """기준일의 매장별 많이 팔린 상품을 읽는다 (부록 B.10).
+
+    Args:
+        engine: 대상 엔진.
+        saledate: ``YYYYMMDD``.
+        limit: 매장마다 보여 줄 상품 수.
+
+    Returns:
+        ``매장``·``상품``·``매출``·``수량`` 열을 갖는 프레임.
+    """
+    table = schema.MART_DAY_STORE_ITEM
+
+    with engine.connect() as connection:
+        frame = pd.read_sql(
+            select(table.c.DEPT_CD, table.c.GOODS_NM, table.c.SALE_AMT, table.c.QTY)
+            .where(table.c.SALEDATE == saledate)
+            .order_by(table.c.DEPT_CD, table.c.SALE_AMT.desc()),
+            connection,
+        )
+
+    names = _store_names(engine)
+    ranked = frame.groupby("DEPT_CD", sort=False).head(limit)
+    return pd.DataFrame(
+        {
+            "매장": ranked["DEPT_CD"].map(names),
+            "상품": ranked["GOODS_NM"],
+            "매출": ranked["SALE_AMT"],
+            "수량": ranked["QTY"],
+        }
+    ).reset_index(drop=True)
+
+
+def load_period_summary(
+    engine: Engine, saledate: str, days: int = PERIOD_DAYS
+) -> dict[str, Any]:
+    """최근 N일 매장별 누적과 직전 같은 기간 대비를 읽는다 (부록 B.10).
+
+    **집계는 DB가 한다.** 화면은 결과를 표시만 한다 (부록 B.2의 경계).
+    직전 기간에 데이터가 없으면 대비를 ``None`` 으로 둔다 — 없는 비교를 지어내지 않는다.
+
+    Args:
+        engine: 대상 엔진.
+        saledate: 기준일 ``YYYYMMDD``.
+        days: 집계 일수 (기준일 포함).
+
+    Returns:
+        ``days``·``from_date``·``sale_amt``·``deal_cnt``·``prev_sale_amt``·
+        ``prev_diff_pct``·``stores`` 를 담은 딕셔너리.
+    """
+    from sqlalchemy import func
+
+    table = schema.MART_DAY_STORE
+    start = shift_days(saledate, 0 - days + 1)
+    prev_end = shift_days(start, -1)
+    prev_start = shift_days(prev_end, 0 - days + 1)
+    names = _store_names(engine)
+
+    def totals(from_date: str, to_date: str) -> tuple[int, int, int]:
+        """구간의 매출·손님·일수를 센다.
+
+        Args:
+            from_date: 시작일 ``YYYYMMDD``.
+            to_date: 종료일 ``YYYYMMDD``.
+
+        Returns:
+            ``(매출, 손님 수, 행수)``.
+        """
+        with engine.connect() as connection:
+            row = connection.execute(
+                select(
+                    func.coalesce(func.sum(table.c.SALE_AMT), 0),
+                    func.coalesce(func.sum(table.c.DEAL_CNT), 0),
+                    func.count(table.c.SALEDATE),
+                ).where(table.c.SALEDATE.between(from_date, to_date))
+            ).one()
+        return int(row[0]), int(row[1]), int(row[2])
+
+    sale_amt, deal_cnt, _ = totals(start, saledate)
+    prev_sale_amt, _, prev_rows = totals(prev_start, prev_end)
+
+    with engine.connect() as connection:
+        by_store = connection.execute(
+            select(
+                table.c.DEPT_CD,
+                func.coalesce(func.sum(table.c.SALE_AMT), 0),
+                func.coalesce(func.sum(table.c.DEAL_CNT), 0),
+            )
+            .where(table.c.SALEDATE.between(start, saledate))
+            .group_by(table.c.DEPT_CD)
+            .order_by(func.sum(table.c.SALE_AMT).desc())
+        ).all()
+
+    return {
+        "days": days,
+        "from_date": start,
+        "to_date": saledate,
+        "sale_amt": sale_amt,
+        "deal_cnt": deal_cnt,
+        "prev_sale_amt": prev_sale_amt,
+        # 직전 기간이 통째로 비어 있으면 비교 대상이 없다 (명세 7.4의 폴백과 같은 태도).
+        "prev_diff_pct": (
+            None if prev_rows == 0 or prev_sale_amt == 0
+            else round((sale_amt - prev_sale_amt) / prev_sale_amt * 100, 1)
+        ),
+        "stores": [
+            {
+                "dept_cd": code,
+                "dept_nm": names.get(code, code),
+                "sale_amt": int(amount),
+                "deal_cnt": int(count),
+            }
+            for code, amount, count in by_store
+        ],
+    }
 
 
 def load_trend(engine: Engine, saledate: str, dept_cd: str, days: int = TREND_DAYS) -> pd.DataFrame:
@@ -510,11 +716,30 @@ def apply_pending_selection() -> None:
             st.session_state[widget_key] = st.session_state.pop(pending_key)
 
 
-def _group_section(engine: Engine, saledate: str) -> None:
-    """여러 매장을 한 화면에 보여 준다 (부록 B.7).
+def _dow_note(row: dict[str, Any]) -> str:
+    """평소 같은 요일과 견준 문구를 만든다 (부록 B.10).
 
-    **이 함수는 숫자를 하나도 만들지 않는다.** 합계·1인당·먼저 볼 매장까지
-    배치가 만들어 저장한 것을 읽어 표시만 한다 (부록 B.2).
+    값은 배치가 만든 것을 쓰고, 여기서는 **고르기만** 한다 (산술 없음).
+
+    Args:
+        row: 그룹 요약의 매장 행.
+
+    Returns:
+        화면에 그대로 쓰는 문구.
+    """
+    if not row["dow_baseline_available"]:
+        return DOW_NO_BASELINE
+    return f"평소 같은 요일 대비 {row['dow_diff_pct']}%"
+
+
+def _group_section(engine: Engine, saledate: str) -> None:
+    """여러 매장을 한 장의 보고서로 보여 준다 (부록 B.7·B.10).
+
+    중간 관리자가 팀장에게 올릴 수 있는 형태다 — 요약 → 매장별 → 흐름 →
+    시간대 → 상품 → 기간 순으로 위에서 아래로 읽힌다.
+
+    **이 함수는 숫자를 하나도 만들지 않는다.** 합계·비중은 배치가, 기간 집계는
+    DB가 만든 것을 읽어 표시만 한다 (부록 B.2·B.10).
     정적 검사 테스트가 산술 연산을 막는다.
 
     Args:
@@ -526,22 +751,45 @@ def _group_section(engine: Engine, saledate: str) -> None:
         st.info(GROUP_EMPTY_STATE)
         return
 
+    period = load_period_summary(engine, saledate)
+
     st.markdown(
-        f"### 📋 {format_display_date(payload['saledate'])} · "
+        f"### 📋 여러 매장 보고 &nbsp;&nbsp;|&nbsp;&nbsp; "
+        f"{format_display_date(payload['saledate'])} &nbsp;&nbsp;|&nbsp;&nbsp; "
         f"{payload['store_count']}개 매장 &nbsp;&nbsp;|&nbsp;&nbsp; {MOCKUP_BADGE}"
     )
     st.markdown(f"#### {payload['attention_line']}")
+
+    # 1. 총평 — 기준일 합계와 지난주 같은 기간 대비
+    summary_cols = st.columns(4)
+    summary_cols[0].metric("어제 매출", f"{payload['total_sale_amt']:,}원")
+    summary_cols[1].metric("손님", f"{payload['total_deal_cnt']:,}명")
+    summary_cols[2].metric("1인당", f"{payload['group_avg_ticket']:,}원")
+    summary_cols[3].metric(
+        f"최근 {period['days']}일 매출",
+        f"{period['sale_amt']:,}원",
+        delta=(
+            PERIOD_NO_BASELINE
+            if period["prev_diff_pct"] is None
+            else f"{period['prev_diff_pct']}% (지난 {period['days']}일 대비)"
+        ),
+    )
     st.divider()
 
+    # 2. 매장별 요약
+    st.markdown("#### 매장별")
     for row in payload["stores"]:
-        detail, action = st.columns([4, 1], vertical_alignment="center")
+        detail, action = st.columns([5, 1], vertical_alignment="center")
         with detail:
             st.markdown(
-                f"**{row['dept_nm']}** &nbsp;&nbsp; {row['sale_amt']:,}원 &nbsp;·&nbsp; "
-                f"손님 {row['deal_cnt']:,}명 &nbsp;·&nbsp; 1인당 {row['avg_ticket']:,}원"
+                f"**{row['dept_nm']}** &nbsp;&nbsp; {row['sale_amt']:,}원 "
+                f"&nbsp;·&nbsp; 손님 {row['deal_cnt']:,}명 "
+                f"&nbsp;·&nbsp; 1인당 {row['avg_ticket']:,}원 "
+                f"&nbsp;·&nbsp; 비중 {row['share_pct']}%"
             )
             st.markdown(
                 f"{GROUP_STATUS_MARKS[row['status']]} &nbsp;{row['status_text']}"
+                f" &nbsp;&nbsp;·&nbsp;&nbsp; {_dow_note(row)}"
             )
         with action:
             if st.button("자세히", key=f"goto_{row['dept_cd']}", width="stretch"):
@@ -550,12 +798,66 @@ def _group_section(engine: Engine, saledate: str) -> None:
                 st.session_state["pending_store"] = row["dept_cd"]
                 st.session_state["pending_view"] = VIEW_MODES[0]
                 st.rerun()
-        st.divider()
 
     st.markdown(
         f"**{GROUP_TOTAL_LABEL}** &nbsp;&nbsp; {payload['total_sale_amt']:,}원 "
         f"&nbsp;·&nbsp; 손님 {payload['total_deal_cnt']:,}명 "
         f"&nbsp;·&nbsp; 1인당 {payload['group_avg_ticket']:,}원"
+    )
+    st.divider()
+
+    # 3. 매출 흐름 — 요청한 매장별 그래프
+    st.markdown(f"#### 매장별 매출 흐름 (최근 {TREND_DAYS}일)")
+    st.line_chart(load_group_trend(engine, saledate), height=260)
+
+    # 4. 시간대 비교
+    st.markdown("#### 시간대별 매출")
+    st.bar_chart(load_group_hourly(engine, saledate), height=260)
+
+    # 5. 매장별 많이 팔린 상품
+    st.markdown("#### 매장별 많이 팔린 상품")
+    st.dataframe(
+        load_group_top_items(engine, saledate),
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "매출": st.column_config.NumberColumn(format="%d원"),
+            "수량": st.column_config.NumberColumn(format="%d개"),
+        },
+    )
+
+    # 6. 기간 합계
+    st.markdown(f"#### 최근 {period['days']}일 매장별 합계")
+    st.dataframe(
+        pd.DataFrame(
+            {
+                "매장": [row["dept_nm"] for row in period["stores"]],
+                "매출": [row["sale_amt"] for row in period["stores"]],
+                "손님": [row["deal_cnt"] for row in period["stores"]],
+            }
+        ),
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "매출": st.column_config.NumberColumn(format="%d원"),
+            "손님": st.column_config.NumberColumn(format="%d명"),
+        },
+    )
+    st.caption(
+        f"집계 기간: {format_display_date(period['from_date'])} ~ "
+        f"{format_display_date(period['to_date'])}"
+    )
+    st.divider()
+
+    # 7. 내려받기 — 팀장에게 건넬 파일
+    from src.report import group_report
+
+    st.download_button(
+        "📄 이 보고서 내려받기",
+        data=group_report.report_bytes(engine, saledate),
+        file_name=f"여러매장_보고_{saledate}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        width="stretch",
     )
     st.caption(FOOTER_NOTE)
 
