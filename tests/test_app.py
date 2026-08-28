@@ -556,3 +556,26 @@ def test_group_briefing_missing_day_returns_none(built_engine: Engine) -> None:
     from src.app import main
 
     assert main.load_group_briefing(built_engine, "20991231") is None
+
+
+def test_group_view_button_opens_that_store(built_engine: Engine) -> None:
+    """부록 B.7: [자세히]를 누르면 그 매장의 점포장 화면으로 넘어간다.
+
+    Streamlit은 위젯이 만들어진 **뒤에** 그 키를 바꾸는 것을 막는다.
+    버튼을 실제로 눌러 보지 않으면 이 제약에 걸리는 것을 알 수 없다 —
+    배포에서 StreamlitAPIException 으로 터졌던 자리다.
+    """
+    from streamlit.testing.v1 import AppTest
+    from src.app import main
+
+    app_test = AppTest.from_file(str(_repo_root() / "streamlit_app.py"), default_timeout=60)
+    app_test.secrets["POS_BRIEFING_DB_URL"] = str(built_engine.url)
+    app_test.run()
+    app_test.sidebar.radio[0].set_value(main.VIEW_MODES[1]).run()
+
+    app_test.button(key="goto_901003").click().run()
+
+    assert not app_test.exception, [error.value for error in app_test.exception]
+    assert app_test.sidebar.radio[0].value == main.VIEW_MODES[0]
+    assert app_test.session_state[main.STORE_PICK_KEY] == "901003"
+    assert "간이역 소형점" in " ".join(block.value for block in app_test.markdown)

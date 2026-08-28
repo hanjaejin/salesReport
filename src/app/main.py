@@ -43,9 +43,16 @@ VIEW_MODES: tuple[str, str] = ("점포장 화면", "여러 매장 보기")
 #: 상태별 표시 기호 (부록 B.6). 색만으로 구분하지 않는다 — 기호와 글자를 겹쳐 둔다.
 GROUP_STATUS_MARKS: dict[str, str] = {"STOCK": "🔴", "PEAK": "🟡", "CALM": "⚪"}
 
-#: 위젯 상태 키 (부록 B.7). 관리자 화면에서 매장을 고르면 이 값을 바꿔 화면을 넘긴다.
+#: 위젯 상태 키 (부록 B.7).
 VIEW_MODE_KEY = "view_mode"
 STORE_PICK_KEY = "store_pick"
+
+#: 대기 키 — 관리자 화면의 [자세히]가 여기에 적어 두고, 다음 실행 맨 앞에서 옮긴다.
+#: streamlit은 위젯이 만들어진 **뒤에** 그 키를 바꾸는 것을 막기 때문이다.
+PENDING_KEYS: dict[str, str] = {
+    "pending_store": STORE_PICK_KEY,
+    "pending_view": VIEW_MODE_KEY,
+}
 
 GROUP_TOTAL_LABEL = "합계"
 GROUP_EMPTY_STATE = "이 날짜의 요약이 아직 없어요. 다른 날짜를 선택해 주세요"
@@ -491,6 +498,18 @@ def _admin_section(engine: Engine, dept_cd: str) -> None:
                 st.error("값이 달라졌어요 — 확인이 필요합니다")
 
 
+def apply_pending_selection() -> None:
+    """관리자 화면에서 고른 매장을 위젯 상태에 반영한다 (부록 B.7).
+
+    streamlit은 위젯이 만들어진 **뒤에** 그 키를 바꾸는 것을 막는다
+    (``StreamlitAPIException``). 그래서 버튼은 대기 키에만 적어 두고,
+    다음 실행에서 **위젯을 만들기 전인** 여기서 옮긴다.
+    """
+    for pending_key, widget_key in PENDING_KEYS.items():
+        if pending_key in st.session_state:
+            st.session_state[widget_key] = st.session_state.pop(pending_key)
+
+
 def _group_section(engine: Engine, saledate: str) -> None:
     """여러 매장을 한 화면에 보여 준다 (부록 B.7).
 
@@ -527,8 +546,9 @@ def _group_section(engine: Engine, saledate: str) -> None:
         with action:
             if st.button("자세히", key=f"goto_{row['dept_cd']}", width="stretch"):
                 # 관리자가 "어느 매장부터"를 정한 뒤 바로 그 매장을 볼 수 있어야 한다.
-                st.session_state[STORE_PICK_KEY] = row["dept_cd"]
-                st.session_state[VIEW_MODE_KEY] = VIEW_MODES[0]
+                # 위젯 키를 여기서 직접 바꾸면 streamlit이 막는다 — 대기 키에 적어 둔다.
+                st.session_state["pending_store"] = row["dept_cd"]
+                st.session_state["pending_view"] = VIEW_MODES[0]
                 st.rerun()
         st.divider()
 
@@ -543,6 +563,9 @@ def _group_section(engine: Engine, saledate: str) -> None:
 def main() -> None:
     """화면 전체를 그린다."""
     st.set_page_config(page_title=PAGE_TITLE, page_icon="🏪", layout="centered")
+
+    # 어떤 위젯보다 먼저 옮겨야 한다 (부록 B.7).
+    apply_pending_selection()
 
     configured = database_url()
     engine = get_engine(configured)
