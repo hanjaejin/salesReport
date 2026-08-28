@@ -119,6 +119,7 @@ def test_read_model_excludes_facts() -> None:
         "MART_DAY_STORE",
         "MART_HOUR_STORE",
         "MART_DAY_STORE_ITEM",
+        "MART_DAY_STORE_SIGNAL",
         "BRIEFING_DAILY",
         "BRIEFING_DAILY_GROUP",
     ]

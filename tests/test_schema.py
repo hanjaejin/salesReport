@@ -70,6 +70,11 @@ EXPECTED_TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("SALEDATE", "DEPT_CD", "PAYLOAD_JSON"),
         ("SALEDATE", "DEPT_CD"),
     ),
+    # 부록 B.13 — 신호를 집계 가능한 모양으로 옮겨 적은 마트.
+    "MART_DAY_STORE_SIGNAL": (
+        ("SALEDATE", "DEPT_CD", "STATUS", "RISK_COUNT"),
+        ("SALEDATE", "DEPT_CD"),
+    ),
     # 부록 B.3 — 여러 매장 요약. 점포 단위가 아니라 날짜 단위다.
     "BRIEFING_DAILY_GROUP": (("SALEDATE", "PAYLOAD_JSON"), ("SALEDATE",)),
     "FEEDBACK_LOG": (
@@ -191,3 +196,16 @@ def test_group_briefing_columns_are_frozen() -> None:
         "SALEDATE",
         "PAYLOAD_JSON",
     ]
+
+
+def test_signal_table_exists_for_scale() -> None:
+    """부록 B.13 결정 1: 신호를 JSON 밖 컬럼으로도 남긴다 (1,300개 매장 집계용)."""
+    table = schema.MART_DAY_STORE_SIGNAL
+
+    assert [column.name for column in table.columns] == [
+        "SALEDATE",
+        "DEPT_CD",
+        "STATUS",
+        "RISK_COUNT",
+    ]
+    assert [column.name for column in table.primary_key.columns] == ["SALEDATE", "DEPT_CD"]

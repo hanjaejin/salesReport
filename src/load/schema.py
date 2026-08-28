@@ -166,6 +166,21 @@ BRIEFING_DAILY = Table(
     PrimaryKeyConstraint("SALEDATE", "DEPT_CD"),
 )
 
+#: 그날 그 매장의 신호를 **집계 가능한 모양으로** 옮겨 적은 마트 (부록 B.13 결정 1).
+#:
+#: 진실의 원천은 여전히 ``BRIEFING_DAILY`` 의 카드다. 다만 "최근 30일 중 재고가
+#: 며칠 부족했나"를 세려면 JSON을 전부 열어야 하는데, 매장이 1,300개면 화면을
+#: 열 때마다 39,000건을 파싱하게 된다. 컬럼으로 두면 GROUP BY 한 번으로 끝난다.
+MART_DAY_STORE_SIGNAL = Table(
+    "MART_DAY_STORE_SIGNAL",
+    metadata,
+    Column("SALEDATE", Text, nullable=False),
+    Column("DEPT_CD", Text, nullable=False),
+    Column("STATUS", Text, nullable=False),  # STOCK · PEAK · CALM (부록 B.5)
+    Column("RISK_COUNT", Integer, nullable=False),
+    PrimaryKeyConstraint("SALEDATE", "DEPT_CD"),
+)
+
 #: 여러 매장을 함께 보는 관리자 화면이 읽는 요약 (부록 B.3).
 #: 점포 단위가 아니므로 ``DEPT_CD`` 가 없다 — 날짜 하나에 행 하나다.
 #: 합계도 배치가 만들어 여기 저장한다. 화면이 매장을 더하면 그 합계는

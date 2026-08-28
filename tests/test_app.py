@@ -16,6 +16,7 @@ import pytest
 from sqlalchemy import Engine, select
 
 from src.common.config import get_engine
+from src.common.dateutil import shift_days
 from src.extract.sample import SampleExtractor
 from src.load import pipeline, schema
 
@@ -651,4 +652,98 @@ def test_period_summary_stores_match_total(built_engine: Engine) -> None:
 
     summary = main.load_period_summary(built_engine, SALEDATE, days=3)
 
+    assert summary["stores_truncated"] is False
     assert summary["sale_amt"] == sum(row["sale_amt"] for row in summary["stores"])
+
+
+def test_period_summary_caps_store_rows(built_engine: Engine) -> None:
+    """부록 B.13 결정 4: 목록은 DB가 잘라 주고, 합계는 전 매장 기준으로 남는다."""
+    from src.app import main
+
+    full = main.load_period_summary(built_engine, SALEDATE, days=3)
+    capped = main.load_period_summary(built_engine, SALEDATE, days=3, limit=2)
+
+    assert len(capped["stores"]) == 2
+    assert capped["stores_truncated"] is True
+    assert capped["sale_amt"] == full["sale_amt"]
+
+
+# --- 부록 B.13: 규모를 견디는 분석 자료 ---------------------------------------
+
+
+def test_signal_streak_is_limited_by_db(built_engine: Engine) -> None:
+    """부록 B.14: 재고 반복 집계는 DB가 잘라서 준다 (1,300행을 받아 자르지 않는다)."""
+    from src.app import main
+
+    streak = main.load_signal_streak(built_engine, SALEDATE, days=7, limit=2)
+
+    assert len(streak) <= 2
+    assert list(streak.columns) == ["매장", "재고 부족", "시간대 쏠림", "조용한 날"]
+    assert streak["재고 부족"].is_monotonic_decreasing
+
+
+def test_signal_streak_matches_signal_table(built_engine: Engine) -> None:
+    """집계 결과가 신호 마트와 일치한다."""
+    from sqlalchemy import func
+
+    from src.app import main
+
+    streak = main.load_signal_streak(built_engine, SALEDATE, days=7, limit=99)
+    table = schema.MART_DAY_STORE_SIGNAL
+
+    with built_engine.connect() as connection:
+        expected = connection.execute(
+            select(func.count())
+            .select_from(table)
+            .where(
+                table.c.SALEDATE.between(shift_days(SALEDATE, -6), SALEDATE),
+                table.c.STATUS == "STOCK",
+            )
+        ).scalar_one()
+
+    assert streak["재고 부족"].sum() == expected
+
+
+def test_dow_pattern_has_seven_rows(built_engine: Engine) -> None:
+    """부록 B.14: 요일 패턴은 매장 수와 무관하게 7행이다."""
+    from src.app import main
+
+    pattern = main.load_dow_pattern(built_engine, SALEDATE, weeks=1)
+
+    assert list(pattern.index) == [
+        "월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일",
+    ]
+    assert pattern.index.name == "요일"
+
+
+def test_monthly_trend_uses_daily_average(built_engine: Engine) -> None:
+    """부록 B.13 결정 5: 월별은 합계가 아니라 **일평균** 이다.
+
+    2월은 28일이라 합계로 보면 실제보다 낮게 보인다. 일수가 만든 착시를
+    지표로 착각하게 두지 않는다.
+    """
+    from sqlalchemy import func
+
+    from src.app import main
+
+    monthly = main.load_monthly_trend(built_engine)
+    table = schema.MART_DAY_STORE
+
+    with built_engine.connect() as connection:
+        total, days = connection.execute(
+            select(
+                func.sum(table.c.SALE_AMT),
+                func.count(func.distinct(table.c.SALEDATE)),
+            ).where(table.c.SALEDATE.like("202607%"))
+        ).one()
+
+    assert monthly.loc["2026-07", "하루 평균 매출"] == round(total / days)
+
+
+def test_chart_series_never_exceeds_cap(built_engine: Engine) -> None:
+    """부록 B.13 결정 3: 그래프 계열 수에 상한이 있다 — 선 1,300개는 그림이 아니다."""
+    from src.app import main
+
+    trend = main.load_group_trend(built_engine, SALEDATE, days=5)
+
+    assert len(trend.columns) <= main.GROUP_CHART_SERIES + 1

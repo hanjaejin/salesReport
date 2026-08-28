@@ -758,3 +758,83 @@ def test_group_share_pct_is_zero_without_sales() -> None:
     assert briefing.share_pct(0, 0) == 0.0
     assert briefing.share_pct(100, 0) == 0.0
     assert briefing.share_pct(25, 200) == 12.5
+
+
+# --- 부록 B.13: 규모 대응 -----------------------------------------------------
+
+
+def test_signal_table_matches_briefing_json(built_engine: Engine) -> None:
+    """부록 B.14: 신호 컬럼이 브리핑 JSON의 카드와 어긋나지 않는다.
+
+    같은 사실을 두 곳에 적으므로, 어긋나면 관리자 화면이 거짓말을 하게 된다.
+    """
+    stores = _store_payloads(built_engine)
+
+    with built_engine.connect() as connection:
+        rows = connection.execute(
+            select(
+                schema.MART_DAY_STORE_SIGNAL.c.DEPT_CD,
+                schema.MART_DAY_STORE_SIGNAL.c.STATUS,
+                schema.MART_DAY_STORE_SIGNAL.c.RISK_COUNT,
+            ).where(schema.MART_DAY_STORE_SIGNAL.c.SALEDATE == FROM_DATE)
+        ).all()
+
+    assert len(rows) == len(stores)
+    for dept_cd, status, risk_count in rows:
+        expected_status, _ = briefing.group_status(stores[dept_cd])
+        assert status == expected_status, dept_cd
+        assert risk_count == stores[dept_cd]["stock_risk"]["risk_count"]
+
+
+def test_group_payload_keeps_all_when_store_count_is_small(built_engine: Engine) -> None:
+    """부록 B.13 결정 6: 데모(3개)는 전부 담고 잘렸다고 말하지 않는다."""
+    group = _group(built_engine)
+
+    assert group["stores_truncated"] is False
+    assert len(group["stores"]) == group["store_count"]
+
+
+def test_group_payload_caps_store_rows() -> None:
+    """부록 B.13 결정 2: 매장이 많으면 상위 N개만 담는다 — 1,300행을 화면에 못 쓴다."""
+    payloads = [
+        {
+            "dept_cd": f"9{index:05d}",
+            "dept_nm": f"매장{index}",
+            "sale_amt": index * 1000,
+            "deal_cnt": index,
+            "avg_ticket": 1000,
+            "dow_diff_pct": 0.0,
+            "dow_baseline_available": True,
+            "peak_block": {"name": "아침"},
+            "stock_risk": {"risk_count": 0},
+            "cards": [],
+        }
+        for index in range(1, 51)
+    ]
+
+    group = briefing.build_group_payload("20260731", payloads)
+
+    assert group["store_count"] == 50
+    assert len(group["stores"]) == briefing.GROUP_STORE_ROWS
+    assert group["stores_truncated"] is True
+    # 잘려도 합계는 전 매장 기준이어야 한다.
+    assert group["total_sale_amt"] == sum(p["sale_amt"] for p in payloads)
+
+
+def test_status_counts_cover_every_store(built_engine: Engine) -> None:
+    """부록 B.14: 상태별 개수의 합이 전체 매장 수와 같다 (잘려도 통계는 전수)."""
+    group = _group(built_engine)
+
+    assert sum(group["status_counts"].values()) == group["store_count"]
+
+
+def test_quartiles_are_ordered(built_engine: Engine) -> None:
+    """부록 B.14: 분위수가 오름차순이다.
+
+    1,300개에서는 평균이 쓸모없다 — 대형점 하나가 끌어올린다.
+    "내 매장이 어디쯤인가"는 중앙값과 사분위로만 답할 수 있다.
+    """
+    quartiles = _group(built_engine)["sale_amt_quartiles"]
+    values = [quartiles[key] for key in ("min", "p25", "median", "p75", "max")]
+
+    assert values == sorted(values)

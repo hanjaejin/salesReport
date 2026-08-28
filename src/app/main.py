@@ -23,7 +23,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from streamlit.errors import StreamlitAPIException
 
 from src.common.config import DB_PATH, DB_URL_ENV, get_engine, is_sqlite
-from src.common.dateutil import date_range, format_date, parse_date, shift_days
+from src.common.dateutil import date_range, dow_name, format_date, parse_date, shift_days
 from src.load import schema
 
 # --- 화면 문구 (전문용어 금지 — 명세 14장) ---------------------------------
@@ -77,6 +77,34 @@ GROUP_TOP_ITEMS = 3
 
 #: 보고서 기간 집계 기본 일수 (부록 B.10).
 PERIOD_DAYS = 7
+
+#: 기간 합계 표에 담을 매장 수 (부록 B.13 결정 2·4).
+PERIOD_STORE_ROWS = 20
+
+#: 그래프에 그릴 매장 계열 수 상한 (부록 B.13 결정 3).
+#: 실제 환경은 매장 1,300개다 — 선 1,300개는 그림이 아니다.
+#: 매장이 이보다 적으면 전부 그린다 (데모 3개는 그대로).
+GROUP_CHART_SERIES = 5
+
+#: 재고 반복을 셀 구간과 보여 줄 매장 수 (부록 B.13 결정 5).
+SIGNAL_STREAK_DAYS = 30
+SIGNAL_STREAK_ROWS = 10
+
+#: 요일 패턴을 낼 기간 (주). 요일당 표본이 이 수만큼 쌓인다.
+DOW_PATTERN_WEEKS = 12
+
+#: 전체 합계 계열의 이름 (매장이 많을 때 대표선으로 쓴다).
+TOTAL_SERIES_NAME = "전체 합계"
+
+#: 표 아래 안내 문구.
+SIGNAL_STREAK_NOTE = "며칠씩 이어지면 그날의 일이 아니라 준비 방식을 살펴볼 때입니다"
+MONTHLY_NOTE = "달마다 날수가 달라 합계 대신 하루 평균으로 그렸습니다"
+PERIOD_TRUNCATED_NOTE = " · 매출 상위 매장만 보여 줍니다"
+
+#: 요일 이름 (표시 순서 고정 — 매장 수와 무관하게 7행).
+DOW_ORDER: tuple[str, ...] = (
+    "월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일",
+)
 
 
 # --- 데이터 접근: 저장된 것을 읽기만 한다 -----------------------------------
@@ -260,7 +288,15 @@ def load_group_trend(
 
     names = _store_names(engine)
     wide = frame.pivot(index="SALEDATE", columns="DEPT_CD", values="SALE_AMT")
-    wide = wide.reindex(columns=list(names)).rename(columns=names)
+
+    # 계열 수를 묶는다 (부록 B.13 결정 3) — 매장이 많으면 상위 N개 + 전체 합계선.
+    if len(wide.columns) > GROUP_CHART_SERIES:
+        leaders = wide.sum().nlargest(GROUP_CHART_SERIES).index
+        wide = wide[list(leaders)].assign(**{TOTAL_SERIES_NAME: frame.groupby("SALEDATE")["SALE_AMT"].sum()})
+        wide = wide.rename(columns=names)
+    else:
+        wide = wide.reindex(columns=list(names)).rename(columns=names)
+
     wide.index = [format_display_date(value) for value in wide.index]
     wide.index.name = "날짜"
     return wide
@@ -288,7 +324,14 @@ def load_group_hourly(engine: Engine, saledate: str) -> pd.DataFrame:
 
     names = _store_names(engine)
     wide = frame.pivot(index="HOUR", columns="DEPT_CD", values="SALE_AMT")
-    wide = wide.reindex(columns=list(names)).rename(columns=names).fillna(0)
+
+    # 매장이 많으면 겹쳐 볼 수 없다 — 전체 합계 하나로 보여 준다 (부록 B.13 결정 3).
+    if len(wide.columns) > GROUP_CHART_SERIES:
+        wide = frame.groupby("HOUR")["SALE_AMT"].sum().to_frame(TOTAL_SERIES_NAME)
+    else:
+        wide = wide.reindex(columns=list(names)).rename(columns=names)
+
+    wide = wide.fillna(0)
     wide.index = [f"{hour}시" for hour in wide.index]
     wide.index.name = "시간"
     return wide
@@ -330,7 +373,10 @@ def load_group_top_items(
 
 
 def load_period_summary(
-    engine: Engine, saledate: str, days: int = PERIOD_DAYS
+    engine: Engine,
+    saledate: str,
+    days: int = PERIOD_DAYS,
+    limit: int = PERIOD_STORE_ROWS,
 ) -> dict[str, Any]:
     """최근 N일 매장별 누적과 직전 같은 기간 대비를 읽는다 (부록 B.10).
 
@@ -341,10 +387,11 @@ def load_period_summary(
         engine: 대상 엔진.
         saledate: 기준일 ``YYYYMMDD``.
         days: 집계 일수 (기준일 포함).
+        limit: 목록에 담을 매장 수 (매출 많은 순). 합계는 **전 매장** 기준이다.
 
     Returns:
         ``days``·``from_date``·``sale_amt``·``deal_cnt``·``prev_sale_amt``·
-        ``prev_diff_pct``·``stores`` 를 담은 딕셔너리.
+        ``prev_diff_pct``·``stores``·``stores_truncated`` 를 담은 딕셔너리.
     """
     from sqlalchemy import func
 
@@ -387,6 +434,8 @@ def load_period_summary(
             .where(table.c.SALEDATE.between(start, saledate))
             .group_by(table.c.DEPT_CD)
             .order_by(func.sum(table.c.SALE_AMT).desc())
+            # 자르기는 DB가 한다 (부록 B.13 결정 4) — 1,300행을 받아 head() 하지 않는다.
+            .limit(limit + 1)
         ).all()
 
     return {
@@ -408,9 +457,158 @@ def load_period_summary(
                 "sale_amt": int(amount),
                 "deal_cnt": int(count),
             }
-            for code, amount, count in by_store
+            for code, amount, count in by_store[:limit]
         ],
+        # 한 행 더 받아 왔으면 뒤에 더 있다는 뜻이다 (개수를 다시 세지 않는다).
+        "stores_truncated": len(by_store) > limit,
     }
+
+
+def load_signal_streak(
+    engine: Engine,
+    saledate: str,
+    days: int = SIGNAL_STREAK_DAYS,
+    limit: int = SIGNAL_STREAK_ROWS,
+) -> pd.DataFrame:
+    """최근 N일 동안 매장별로 어떤 신호가 며칠 있었는지 센다 (부록 B.13 결정 5).
+
+    하루짜리 "오늘 재고 부족"은 그날의 사건이지만, 30일 중 13일이면
+    **발주 기준 자체의 문제**다. 관리자가 위에 보고할 때 필요한 것은 후자다.
+
+    집계와 자르기를 **DB가** 한다 — 매장이 1,300개여도 결과는 ``limit`` 행이다.
+
+    Args:
+        engine: 대상 엔진.
+        saledate: 기준일 ``YYYYMMDD``.
+        days: 거슬러 셀 일수 (기준일 포함).
+        limit: 보여 줄 매장 수 (재고 부족이 많은 순).
+
+    Returns:
+        ``매장``·``재고 부족``·``시간대 쏠림``·``조용한 날`` 열을 갖는 프레임.
+    """
+    from sqlalchemy import case, func
+
+    table = schema.MART_DAY_STORE_SIGNAL
+    start = shift_days(saledate, 0 - days + 1)
+
+    def days_with(status: str) -> object:
+        """해당 상태였던 날 수를 세는 식을 만든다.
+
+        Args:
+            status: ``STOCK``·``PEAK``·``CALM``.
+
+        Returns:
+            SQL 집계 식.
+        """
+        return func.sum(case((table.c.STATUS == status, 1), else_=0))
+
+    stock_days = days_with("STOCK")
+    with engine.connect() as connection:
+        rows = connection.execute(
+            select(
+                table.c.DEPT_CD,
+                stock_days,
+                days_with("PEAK"),
+                days_with("CALM"),
+            )
+            .where(table.c.SALEDATE.between(start, saledate))
+            .group_by(table.c.DEPT_CD)
+            .order_by(stock_days.desc(), table.c.DEPT_CD)
+            .limit(limit)
+        ).all()
+
+    names = _store_names(engine)
+    return pd.DataFrame(
+        {
+            "매장": [names.get(row[0], row[0]) for row in rows],
+            "재고 부족": [int(row[1]) for row in rows],
+            "시간대 쏠림": [int(row[2]) for row in rows],
+            "조용한 날": [int(row[3]) for row in rows],
+        }
+    )
+
+
+def load_dow_pattern(
+    engine: Engine, saledate: str, weeks: int = DOW_PATTERN_WEEKS
+) -> pd.DataFrame:
+    """요일별 하루 평균 매출을 낸다 (부록 B.13 결정 5).
+
+    매장 수와 무관하게 **항상 7행**이다. 매장이 적으면 매장별 열을,
+    많으면 전체 합계 한 열을 준다 (결정 3).
+
+    Args:
+        engine: 대상 엔진.
+        saledate: 기준일 ``YYYYMMDD``.
+        weeks: 거슬러 볼 주 수.
+
+    Returns:
+        요일을 인덱스로 갖는 프레임.
+    """
+    table = schema.MART_DAY_STORE
+    start = shift_days(saledate, 0 - weeks * 7 + 1)
+
+    with engine.connect() as connection:
+        frame = pd.read_sql(
+            select(table.c.SALEDATE, table.c.DEPT_CD, table.c.SALE_AMT)
+            .where(table.c.SALEDATE.between(start, saledate))
+            .order_by(table.c.SALEDATE),
+            connection,
+        )
+
+    frame["요일"] = frame["SALEDATE"].map(dow_name)
+    names = _store_names(engine)
+
+    if len(names) > GROUP_CHART_SERIES:
+        wide = (
+            frame.groupby(["SALEDATE", "요일"])["SALE_AMT"]
+            .sum()
+            .reset_index()
+            .groupby("요일")["SALE_AMT"]
+            .mean()
+            .to_frame(TOTAL_SERIES_NAME)
+        )
+    else:
+        wide = frame.pivot_table(
+            index="요일", columns="DEPT_CD", values="SALE_AMT", aggfunc="mean"
+        ).rename(columns=names)
+
+    wide = wide.reindex(list(DOW_ORDER)).round(0).fillna(0).astype(int)
+    wide.index.name = "요일"
+    return wide
+
+
+def load_monthly_trend(engine: Engine) -> pd.DataFrame:
+    """월별 **하루 평균** 매출을 낸다 (부록 B.13 결정 5).
+
+    합계로 보면 2월(28일)이 실제보다 낮게 보인다. 일수가 만든 착시를
+    지표로 착각하게 두지 않는다.
+
+    Args:
+        engine: 대상 엔진.
+
+    Returns:
+        ``YYYY-MM`` 을 인덱스로, ``하루 평균 매출`` 열을 갖는 프레임.
+    """
+    from sqlalchemy import func
+
+    table = schema.MART_DAY_STORE
+    month = func.substr(table.c.SALEDATE, 1, 6)
+
+    with engine.connect() as connection:
+        rows = connection.execute(
+            select(
+                month,
+                func.sum(table.c.SALE_AMT),
+                func.count(func.distinct(table.c.SALEDATE)),
+            )
+            .group_by(month)
+            .order_by(month)
+        ).all()
+
+    return pd.DataFrame(
+        {"하루 평균 매출": [round(int(total) / int(days)) for _, total, days in rows]},
+        index=pd.Index([f"{key[:4]}-{key[4:]}" for key, _, _ in rows], name="월"),
+    )
 
 
 def load_trend(engine: Engine, saledate: str, dept_cd: str, days: int = TREND_DAYS) -> pd.DataFrame:
@@ -799,11 +997,32 @@ def _group_section(engine: Engine, saledate: str) -> None:
                 st.session_state["pending_view"] = VIEW_MODES[0]
                 st.rerun()
 
+    if payload["stores_truncated"]:
+        st.caption(
+            f"매출 상위 {payload['stores_shown']}개만 보여 줍니다 "
+            f"(전체 {payload['store_count']:,}개)"
+        )
+
     st.markdown(
         f"**{GROUP_TOTAL_LABEL}** &nbsp;&nbsp; {payload['total_sale_amt']:,}원 "
         f"&nbsp;·&nbsp; 손님 {payload['total_deal_cnt']:,}명 "
         f"&nbsp;·&nbsp; 1인당 {payload['group_avg_ticket']:,}원"
     )
+
+    # 매장이 많으면 목록보다 분포가 더 많은 것을 말한다 (부록 B.13 결정 2).
+    if payload["stores_truncated"]:
+        quartiles = payload["sale_amt_quartiles"]
+        counts = payload["status_counts"]
+        st.markdown(
+            f"**매장 분포** &nbsp;&nbsp; 가운데 {quartiles['median']:,}원 "
+            f"&nbsp;·&nbsp; 하위 4분의 1 {quartiles['p25']:,}원 이하 "
+            f"&nbsp;·&nbsp; 상위 4분의 1 {quartiles['p75']:,}원 이상"
+        )
+        st.markdown(
+            f"**오늘 상태** &nbsp;&nbsp; 🔴 재고 주의 {counts['STOCK']:,}곳 "
+            f"&nbsp;·&nbsp; 🟡 시간대 쏠림 {counts['PEAK']:,}곳 "
+            f"&nbsp;·&nbsp; ⚪ 조용한 날 {counts['CALM']:,}곳"
+        )
     st.divider()
 
     # 3. 매출 흐름 — 요청한 매장별 그래프
@@ -843,13 +1062,38 @@ def _group_section(engine: Engine, saledate: str) -> None:
             "손님": st.column_config.NumberColumn(format="%d명"),
         },
     )
+    period_note = PERIOD_TRUNCATED_NOTE if period["stores_truncated"] else ""
     st.caption(
         f"집계 기간: {format_display_date(period['from_date'])} ~ "
-        f"{format_display_date(period['to_date'])}"
+        f"{format_display_date(period['to_date'])}{period_note}"
     )
     st.divider()
 
-    # 7. 내려받기 — 팀장에게 건넬 파일
+    # 7. 재고 부족이 반복되는 매장 — 하루 신호가 아니라 구조를 본다
+    st.markdown(f"#### 최근 {SIGNAL_STREAK_DAYS}일 신호가 잦은 매장")
+    st.dataframe(
+        load_signal_streak(engine, saledate),
+        width="stretch",
+        hide_index=True,
+        column_config={
+            "재고 부족": st.column_config.NumberColumn(format="%d일"),
+            "시간대 쏠림": st.column_config.NumberColumn(format="%d일"),
+            "조용한 날": st.column_config.NumberColumn(format="%d일"),
+        },
+    )
+    st.caption(SIGNAL_STREAK_NOTE)
+
+    # 8. 요일 패턴
+    st.markdown(f"#### 요일별 하루 평균 매출 (최근 {DOW_PATTERN_WEEKS}주)")
+    st.bar_chart(load_dow_pattern(engine, saledate), height=260)
+
+    # 9. 월별 흐름 — 합계가 아니라 일평균 (부록 B.13 결정 5)
+    st.markdown("#### 월별 하루 평균 매출")
+    st.line_chart(load_monthly_trend(engine), height=260)
+    st.caption(MONTHLY_NOTE)
+    st.divider()
+
+    # 10. 내려받기 — 팀장에게 건넬 파일
     from src.report import group_report
 
     st.download_button(

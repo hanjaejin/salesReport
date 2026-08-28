@@ -111,6 +111,11 @@ GROUP_ATTENTION_CALM = "오늘은 세 매장 모두 평소대로예요"
 #: 먼저 볼 매장을 고르는 순서 (부록 B.4). 앞에 있을수록 급하다.
 GROUP_ATTENTION_ORDER: tuple[str, ...] = ("STOCK", "PEAK")
 
+#: 그룹 요약에 담을 매장 행 수 상한 (부록 B.13 결정 2).
+#: 실제 환경은 매장 1,300개다. 전부 담으면 화면이 그리려 들고 읽을 수 없다.
+#: 매장이 이보다 적으면 전부 담긴다 — 데모(3개)는 지금과 똑같이 동작한다.
+GROUP_STORE_ROWS: int = 20
+
 #: 위험 품목 하한 — 하루 1개도 안 나가는 꼬리 상품은 제외한다 (부록 A.4).
 MIN_SALE_AVERAGE_FOR_RISK: float = 1.0
 
@@ -728,6 +733,11 @@ def build_group_payload(saledate: str, payloads: Sequence[dict[str, Any]]) -> di
 
     attention = pick_attention(rows)
 
+    # 통계는 **전 매장** 기준으로 먼저 낸다. 목록만 자른다 (부록 B.13 결정 2).
+    status_counts = {status: 0 for status in GROUP_STATUS_TEMPLATES}
+    for row in rows:
+        status_counts[row["status"]] += 1
+
     return {
         "schema_version": SCHEMA_VERSION,
         "saledate": saledate,
@@ -746,8 +756,34 @@ def build_group_payload(saledate: str, payloads: Sequence[dict[str, Any]]) -> di
             if attention is not None
             else GROUP_ATTENTION_CALM
         ),
-        "stores": rows,
+        "status_counts": status_counts,
+        "sale_amt_quartiles": _quartiles([row["sale_amt"] for row in rows]),
+        "stores": rows[:GROUP_STORE_ROWS],
+        "stores_shown": len(rows[:GROUP_STORE_ROWS]),
+        "stores_truncated": len(rows) > GROUP_STORE_ROWS,
     }
+
+
+def _quartiles(values: Sequence[int]) -> dict[str, int]:
+    """매출 분포를 분위수로 요약한다 (부록 B.13 결정 2).
+
+    매장이 1,300개면 평균은 거의 쓸모없다 — 대형점 하나가 끌어올린다.
+    "내 매장이 어디쯤인가"는 중앙값과 사분위로만 답할 수 있다.
+
+    Args:
+        values: 매장별 매출 목록.
+
+    Returns:
+        ``min``·``p25``·``median``·``p75``·``max`` (정수 원). 비면 전부 0.
+    """
+    if not values:
+        return dict.fromkeys(("min", "p25", "median", "p75", "max"), 0)
+
+    array = np.asarray(values, dtype=float)
+    points = np.percentile(array, [0, 25, 50, 75, 100])
+    return dict(
+        zip(("min", "p25", "median", "p75", "max"), (int(round(v)) for v in points), strict=True)
+    )
 
 
 def build_briefings(
@@ -839,6 +875,7 @@ def build_briefings(
         if records:
             connection.execute(schema.BRIEFING_DAILY.insert(), records)
 
+    _store_signals(engine, from_date, to_date, by_date, dept_cds)
     group_count = _store_group_briefings(engine, from_date, to_date, by_date, dept_cds)
 
     logger.info(
@@ -848,6 +885,56 @@ def build_briefings(
         len(records),
         group_count,
     )
+    return len(records)
+
+
+def _store_signals(
+    engine: Engine,
+    from_date: str,
+    to_date: str,
+    by_date: dict[str, list[dict[str, Any]]],
+    dept_cds: Sequence[str] | None,
+) -> int:
+    """신호를 집계 가능한 모양으로 옮겨 적는다 (부록 B.13 결정 1).
+
+    브리핑 JSON 안에만 두면 "최근 30일 중 재고가 며칠 부족했나"를 세기 위해
+    매장 1,300개 × 30일 = 39,000건을 파싱해야 한다. 컬럼으로 두면 GROUP BY 한 번이다.
+
+    **일부 점포만 재생성해도 그 점포 행만 갈아 끼우면 되므로** 그룹 요약과 달리
+    건너뛰지 않는다.
+
+    Args:
+        engine: 대상 엔진.
+        from_date: 시작일 ``YYYYMMDD``.
+        to_date: 종료일 ``YYYYMMDD``.
+        by_date: 날짜 → 그 날 만든 매장 계산 JSON 목록.
+        dept_cds: 이번 실행 대상 점포코드. None이면 전 점포.
+
+    Returns:
+        저장한 신호 행수.
+    """
+    records = [
+        {
+            "SALEDATE": saledate,
+            "DEPT_CD": payload["dept_cd"],
+            "STATUS": group_status(payload)[0],
+            "RISK_COUNT": payload["stock_risk"]["risk_count"],
+        }
+        for saledate, payloads in sorted(by_date.items())
+        for payload in payloads
+    ]
+
+    statement = delete(schema.MART_DAY_STORE_SIGNAL).where(
+        schema.MART_DAY_STORE_SIGNAL.c.SALEDATE.between(from_date, to_date)
+    )
+    if dept_cds is not None:
+        statement = statement.where(schema.MART_DAY_STORE_SIGNAL.c.DEPT_CD.in_(dept_cds))
+
+    with engine.begin() as connection:
+        connection.execute(statement)
+        if records:
+            connection.execute(schema.MART_DAY_STORE_SIGNAL.insert(), records)
+
     return len(records)
 
 
