@@ -70,6 +70,8 @@ EXPECTED_TABLES: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
         ("SALEDATE", "DEPT_CD", "PAYLOAD_JSON"),
         ("SALEDATE", "DEPT_CD"),
     ),
+    # 부록 B.3 — 여러 매장 요약. 점포 단위가 아니라 날짜 단위다.
+    "BRIEFING_DAILY_GROUP": (("SALEDATE", "PAYLOAD_JSON"), ("SALEDATE",)),
     "FEEDBACK_LOG": (
         ("TS", "SALEDATE", "DEPT_CD", "CARD_ID", "ACTION"),
         (),  # 명세 4장 DDL에 PRIMARY KEY 절이 없다 — 추가 로그이므로 중복을 허용한다
@@ -161,3 +163,31 @@ def test_schema_exposes_table_objects() -> None:
         assert getattr(schema, table_name, None) is table, (
             f"schema.{table_name} 모듈 속성이 metadata의 Table과 다르다"
         )
+
+
+# --- 부록 B: 그룹 브리핑 -----------------------------------------------------
+
+
+def test_group_briefing_table_exists() -> None:
+    """부록 B.3: 여러 매장 요약을 담는 테이블이 있다."""
+    assert "BRIEFING_DAILY_GROUP" in schema.metadata.tables
+
+
+def test_group_briefing_is_keyed_by_date_only() -> None:
+    """부록 B.3: 점포 단위가 아니므로 날짜 하나에 행 하나다.
+
+    ``DEPT_CD`` 를 두면 ``DIM_STORE`` 에 없는 코드('ALL')를 만들게 되고,
+    매장 목록 질의마다 예외가 생긴다.
+    """
+    table = schema.BRIEFING_DAILY_GROUP
+
+    assert [column.name for column in table.primary_key.columns] == ["SALEDATE"]
+    assert "DEPT_CD" not in table.c
+
+
+def test_group_briefing_columns_are_frozen() -> None:
+    """부록 B.3의 컬럼 목록이 전부다."""
+    assert [column.name for column in schema.BRIEFING_DAILY_GROUP.columns] == [
+        "SALEDATE",
+        "PAYLOAD_JSON",
+    ]

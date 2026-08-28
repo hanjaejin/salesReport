@@ -619,3 +619,128 @@ def test_line3_flat_support_drops_the_percent() -> None:
 
     assert "0.0%" not in line
     assert line.endswith("1인당 구매액은 3,189원으로 그저께와 거의 같았어요")
+
+
+# --- 부록 B: 그룹 브리핑 (관리자 화면) ---------------------------------------
+
+
+def _group(engine: Engine, saledate: str = FROM_DATE) -> dict:
+    """저장된 그룹 요약을 읽는다.
+
+    Args:
+        engine: 대상 엔진.
+        saledate: ``YYYYMMDD``.
+
+    Returns:
+        그룹 요약 JSON.
+    """
+    with engine.connect() as connection:
+        raw = connection.execute(
+            select(schema.BRIEFING_DAILY_GROUP.c.PAYLOAD_JSON).where(
+                schema.BRIEFING_DAILY_GROUP.c.SALEDATE == saledate
+            )
+        ).scalar_one()
+    return json.loads(raw)
+
+
+def _store_payloads(engine: Engine, saledate: str = FROM_DATE) -> dict[str, dict]:
+    """그 날짜의 매장별 브리핑을 전부 읽는다.
+
+    Args:
+        engine: 대상 엔진.
+        saledate: ``YYYYMMDD``.
+
+    Returns:
+        점포코드 → 계산 JSON.
+    """
+    with engine.connect() as connection:
+        rows = connection.execute(
+            select(
+                schema.BRIEFING_DAILY.c.DEPT_CD, schema.BRIEFING_DAILY.c.PAYLOAD_JSON
+            ).where(schema.BRIEFING_DAILY.c.SALEDATE == saledate)
+        ).all()
+    return {code: json.loads(raw) for code, raw in rows}
+
+
+def test_group_totals_match_store_sum(built_engine: Engine) -> None:
+    """부록 B.5: 그룹 합계 = 매장별 값의 합."""
+    group = _group(built_engine)
+    stores = _store_payloads(built_engine)
+
+    assert group["total_sale_amt"] == sum(p["sale_amt"] for p in stores.values())
+    assert group["total_deal_cnt"] == sum(p["deal_cnt"] for p in stores.values())
+    assert group["store_count"] == len(stores)
+
+
+def test_group_avg_ticket_is_total_based(built_engine: Engine) -> None:
+    """부록 B.5: 1인당 = 총매출 ÷ 총손님. 매장별 1인당의 평균이 아니다.
+
+    손님 수가 다르므로 두 값은 다르다. 큰 매장이 더 크게 반영돼야 한다.
+    """
+    group = _group(built_engine)
+
+    assert group["group_avg_ticket"] == round(
+        group["total_sale_amt"] / group["total_deal_cnt"]
+    )
+
+
+def test_group_avg_ticket_handles_zero_deals() -> None:
+    """부록 B.5: 손님이 0명이면 1인당은 0이다 (0 나눗셈 없음)."""
+    assert briefing.group_avg_ticket(0, 0) == 0
+    assert briefing.group_avg_ticket(1000, 0) == 0
+
+
+def test_group_status_matches_store_cards(built_engine: Engine) -> None:
+    """부록 B.5: ``status`` 는 매장 브리핑의 2줄을 차지한 카드와 항상 일치한다."""
+    group = _group(built_engine)
+    stores = _store_payloads(built_engine)
+
+    for row in group["stores"]:
+        card_ids = {card["card_id"] for card in stores[row["dept_cd"]]["cards"]}
+        expected = "STOCK" if "G3" in card_ids else ("PEAK" if "G2" in card_ids else "CALM")
+        assert row["status"] == expected, row["dept_cd"]
+
+
+def test_group_store_order_is_by_sale_amt(built_engine: Engine) -> None:
+    """부록 B.4: 매장 행은 매출 내림차순 고정 — 매일 순서가 바뀌면 못 읽는다."""
+    amounts = [row["sale_amt"] for row in _group(built_engine)["stores"]]
+
+    assert amounts == sorted(amounts, reverse=True)
+
+
+def test_attention_follows_card_priority() -> None:
+    """부록 B.4: G3 > G2 > 없음. 동순위면 매출이 큰 매장이 앞선다."""
+    rows = [
+        {"dept_cd": "A", "status": "PEAK", "sale_amt": 900},
+        {"dept_cd": "B", "status": "STOCK", "sale_amt": 100},
+        {"dept_cd": "C", "status": "STOCK", "sale_amt": 500},
+    ]
+
+    assert briefing.pick_attention(rows) == "C"
+
+
+def test_attention_is_none_when_all_calm() -> None:
+    """부록 B.4: 아무 매장도 해당 없으면 비운다 — 침묵할 줄 아는 것이 신뢰 조건이다."""
+    rows = [
+        {"dept_cd": "A", "status": "CALM", "sale_amt": 900},
+        {"dept_cd": "B", "status": "CALM", "sale_amt": 100},
+    ]
+
+    assert briefing.pick_attention(rows) is None
+
+
+def test_group_briefing_is_idempotent(built_engine: Engine) -> None:
+    """불변식 3: 같은 기간을 다시 만들어도 결과가 같다."""
+    before = _group(built_engine)
+
+    briefing.build_briefings(built_engine, FROM_DATE, TO_DATE)
+
+    assert _group(built_engine) == before
+
+
+def test_group_status_text_uses_no_jargon(built_engine: Engine) -> None:
+    """부록 B.6: 상태 라벨에 전문용어가 없다."""
+    texts = " ".join(row["status_text"] for row in _group(built_engine)["stores"])
+
+    for word in ("객단가", "증감률", "결품", "리드타임", "소진", "발주", "분석", "예측"):
+        assert word not in texts

@@ -478,3 +478,81 @@ def test_connection_failure_never_shows_credentials(tmp_path: Path) -> None:
 
     assert "SuperSecret123" not in message
     assert "postgres.abcd" not in message
+
+
+# --- 부록 B: 관리자 화면 -----------------------------------------------------
+
+
+def test_admin_view_makes_no_arithmetic() -> None:
+    """부록 B.2의 **핵심 방어선**: 관리자 화면이 숫자를 만들지 않는다.
+
+    화면이 매장을 더하면 그 합계는 "화면이 만든 숫자"가 되어 불변식 1·7을 깬다.
+    합계가 하나 허용되면 다음은 평균, 그다음은 증감률이다. 경계를 여기서 지킨다.
+    """
+    from src.app import main
+
+    source = Path(inspect_module.getfile(main)).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    target = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_group_section"
+    )
+
+    forbidden_calls = {"sum", "round", "abs", "min", "max", "len"}
+    for node in ast.walk(target):
+        assert not isinstance(node, ast.BinOp), f"산술 연산 발견 (line {node.lineno})"
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            assert node.func.id not in forbidden_calls, (
+                f"계산 함수 '{node.func.id}' 호출 (line {node.lineno})"
+            )
+
+
+def test_group_view_label_is_plain_korean() -> None:
+    """부록 B.7: 보기 전환 라벨에 전문용어가 없다."""
+    from src.app import main
+
+    labels = " ".join(main.VIEW_MODES)
+
+    for word in ("관리자", "대시보드", "분석", "AI"):
+        assert word not in labels
+
+
+def test_admin_view_renders_without_exception(built_engine: Engine) -> None:
+    """부록 B.8: 관리자 화면이 예외 없이 그려지고 세 매장이 모두 나온다."""
+    from streamlit.testing.v1 import AppTest
+
+    app_test = AppTest.from_file(str(_repo_root() / "streamlit_app.py"), default_timeout=60)
+    app_test.secrets["POS_BRIEFING_DB_URL"] = str(built_engine.url)
+    app_test.run()
+
+    app_test.sidebar.radio[0].set_value("여러 매장 보기").run()
+
+    assert not app_test.exception, [error.value for error in app_test.exception]
+    shown = " ".join(block.value for block in app_test.markdown)
+    for name in ("중앙역 대형점", "동부역 중형점", "간이역 소형점"):
+        assert name in shown
+
+
+def test_group_briefing_reader_returns_saved_payload(built_engine: Engine) -> None:
+    """화면이 읽는 값이 DB에 저장된 것과 정확히 같다 (재계산 없음)."""
+    from src.app import main
+
+    payload = main.load_group_briefing(built_engine, SALEDATE)
+
+    with built_engine.connect() as connection:
+        raw = connection.execute(
+            select(schema.BRIEFING_DAILY_GROUP.c.PAYLOAD_JSON).where(
+                schema.BRIEFING_DAILY_GROUP.c.SALEDATE == SALEDATE
+            )
+        ).scalar_one()
+
+    assert payload == json.loads(raw)
+
+
+def test_group_briefing_missing_day_returns_none(built_engine: Engine) -> None:
+    """없는 날짜는 예외가 아니라 None을 돌려준다 (빈 상태 안내용)."""
+    from src.app import main
+
+    assert main.load_group_briefing(built_engine, "20991231") is None

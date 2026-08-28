@@ -43,6 +43,7 @@ READ_MODEL_TABLES: tuple[Table, ...] = (
     schema.MART_HOUR_STORE,
     schema.MART_DAY_STORE_ITEM,
     schema.BRIEFING_DAILY,
+    schema.BRIEFING_DAILY_GROUP,
 )
 
 

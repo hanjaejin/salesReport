@@ -36,6 +36,20 @@ REPORT_READY = "오늘의 일일 보고가 준비되어 있어요."
 NO_STOCK_RISK = "지금은 부족한 상품이 없어요"
 FEEDBACK_TOAST = "반영했어요"
 
+#: 보기 전환 (부록 B.7). 기본값은 기존 점포장 화면이다.
+#: 멀티페이지를 쓰지 않는다 — 발표 중 페이지 이동은 흐름이 끊긴다.
+VIEW_MODES: tuple[str, str] = ("점포장 화면", "여러 매장 보기")
+
+#: 상태별 표시 기호 (부록 B.6). 색만으로 구분하지 않는다 — 기호와 글자를 겹쳐 둔다.
+GROUP_STATUS_MARKS: dict[str, str] = {"STOCK": "🔴", "PEAK": "🟡", "CALM": "⚪"}
+
+#: 위젯 상태 키 (부록 B.7). 관리자 화면에서 매장을 고르면 이 값을 바꿔 화면을 넘긴다.
+VIEW_MODE_KEY = "view_mode"
+STORE_PICK_KEY = "store_pick"
+
+GROUP_TOTAL_LABEL = "합계"
+GROUP_EMPTY_STATE = "이 날짜의 요약이 아직 없어요. 다른 날짜를 선택해 주세요"
+
 #: 피드백 버튼 (명세 9장) — "괜찮아요"는 거절이 아니라 사양의 어휘다
 FEEDBACK_ACTIONS: dict[str, str] = {"확인했어요": "ACCEPT", "괜찮아요": "DECLINE"}
 
@@ -160,6 +174,26 @@ def load_briefing(engine: Engine, saledate: str, dept_cd: str) -> dict[str, Any]
             select(schema.BRIEFING_DAILY.c.PAYLOAD_JSON).where(
                 schema.BRIEFING_DAILY.c.SALEDATE == saledate,
                 schema.BRIEFING_DAILY.c.DEPT_CD == dept_cd,
+            )
+        ).scalar_one_or_none()
+
+    return json.loads(raw) if raw is not None else None
+
+
+def load_group_briefing(engine: Engine, saledate: str) -> dict[str, Any] | None:
+    """저장된 여러 매장 요약을 읽는다 (부록 B.7) — JSON 1건 읽기가 전부다.
+
+    Args:
+        engine: 대상 엔진.
+        saledate: ``YYYYMMDD``.
+
+    Returns:
+        그룹 요약 JSON. 없으면 None.
+    """
+    with engine.connect() as connection:
+        raw = connection.execute(
+            select(schema.BRIEFING_DAILY_GROUP.c.PAYLOAD_JSON).where(
+                schema.BRIEFING_DAILY_GROUP.c.SALEDATE == saledate
             )
         ).scalar_one_or_none()
 
@@ -294,7 +328,10 @@ def _sidebar(engine: Engine, stores: pd.DataFrame) -> tuple[str, str, str]:
 
     names = dict(zip(stores["DEPT_CD"], stores["DEPT_NM"], strict=True))
     dept_cd = st.sidebar.selectbox(
-        "점포", options=list(names), format_func=lambda code: names[code]
+        "점포",
+        options=list(names),
+        format_func=lambda code: names[code],
+        key=STORE_PICK_KEY,
     )
 
     dates = load_available_dates(engine, dept_cd)
@@ -454,6 +491,55 @@ def _admin_section(engine: Engine, dept_cd: str) -> None:
                 st.error("값이 달라졌어요 — 확인이 필요합니다")
 
 
+def _group_section(engine: Engine, saledate: str) -> None:
+    """여러 매장을 한 화면에 보여 준다 (부록 B.7).
+
+    **이 함수는 숫자를 하나도 만들지 않는다.** 합계·1인당·먼저 볼 매장까지
+    배치가 만들어 저장한 것을 읽어 표시만 한다 (부록 B.2).
+    정적 검사 테스트가 산술 연산을 막는다.
+
+    Args:
+        engine: 대상 엔진.
+        saledate: 기준일 ``YYYYMMDD``.
+    """
+    payload = load_group_briefing(engine, saledate)
+    if payload is None:
+        st.info(GROUP_EMPTY_STATE)
+        return
+
+    st.markdown(
+        f"### 📋 {format_display_date(payload['saledate'])} · "
+        f"{payload['store_count']}개 매장 &nbsp;&nbsp;|&nbsp;&nbsp; {MOCKUP_BADGE}"
+    )
+    st.markdown(f"#### {payload['attention_line']}")
+    st.divider()
+
+    for row in payload["stores"]:
+        detail, action = st.columns([4, 1], vertical_alignment="center")
+        with detail:
+            st.markdown(
+                f"**{row['dept_nm']}** &nbsp;&nbsp; {row['sale_amt']:,}원 &nbsp;·&nbsp; "
+                f"손님 {row['deal_cnt']:,}명 &nbsp;·&nbsp; 1인당 {row['avg_ticket']:,}원"
+            )
+            st.markdown(
+                f"{GROUP_STATUS_MARKS[row['status']]} &nbsp;{row['status_text']}"
+            )
+        with action:
+            if st.button("자세히", key=f"goto_{row['dept_cd']}", width="stretch"):
+                # 관리자가 "어느 매장부터"를 정한 뒤 바로 그 매장을 볼 수 있어야 한다.
+                st.session_state[STORE_PICK_KEY] = row["dept_cd"]
+                st.session_state[VIEW_MODE_KEY] = VIEW_MODES[0]
+                st.rerun()
+        st.divider()
+
+    st.markdown(
+        f"**{GROUP_TOTAL_LABEL}** &nbsp;&nbsp; {payload['total_sale_amt']:,}원 "
+        f"&nbsp;·&nbsp; 손님 {payload['total_deal_cnt']:,}명 "
+        f"&nbsp;·&nbsp; 1인당 {payload['group_avg_ticket']:,}원"
+    )
+    st.caption(FOOTER_NOTE)
+
+
 def main() -> None:
     """화면 전체를 그린다."""
     st.set_page_config(page_title=PAGE_TITLE, page_icon="🏪", layout="centered")
@@ -479,11 +565,18 @@ def main() -> None:
         )
         return
 
+    # 보기 전환은 사이드바 맨 위에 둔다 (부록 B.7).
+    view_mode = st.sidebar.radio("보기", VIEW_MODES, key=VIEW_MODE_KEY)
+
     dept_cd, dept_nm, saledate = _sidebar(engine, stores)
     _admin_section(engine, dept_cd)
 
     if not saledate:
         st.info(EMPTY_STATE)
+        return
+
+    if view_mode == VIEW_MODES[1]:
+        _group_section(engine, saledate)
         return
 
     st.markdown(

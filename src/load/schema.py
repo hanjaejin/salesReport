@@ -166,6 +166,18 @@ BRIEFING_DAILY = Table(
     PrimaryKeyConstraint("SALEDATE", "DEPT_CD"),
 )
 
+#: 여러 매장을 함께 보는 관리자 화면이 읽는 요약 (부록 B.3).
+#: 점포 단위가 아니므로 ``DEPT_CD`` 가 없다 — 날짜 하나에 행 하나다.
+#: 합계도 배치가 만들어 여기 저장한다. 화면이 매장을 더하면 그 합계는
+#: "화면이 만든 숫자"가 되어 불변식 1·7을 깬다 (부록 B.2).
+BRIEFING_DAILY_GROUP = Table(
+    "BRIEFING_DAILY_GROUP",
+    metadata,
+    Column("SALEDATE", Text, nullable=False),
+    Column("PAYLOAD_JSON", Text, nullable=False),  # 부록 B.5 그룹 요약 JSON
+    PrimaryKeyConstraint("SALEDATE"),
+)
+
 #: 화면의 [확인했어요]/[괜찮아요] 기록. 추가 전용 로그라 PK를 두지 않는다
 #: (같은 사람이 같은 카드를 여러 번 눌러도 전부 남아야 채택률의 원료가 된다).
 FEEDBACK_LOG = Table(

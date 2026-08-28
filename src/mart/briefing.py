@@ -97,6 +97,20 @@ SIGNAL_LABELS: dict[str, str] = {"cnt": "손님 수", "ticket": "1인당 구매�
 #: 받침 유무에 따른 주격 보조사 (ADR-0007 결정 3).
 SIGNAL_PARTICLES: dict[str, str] = {"cnt": "는", "ticket": "은"}
 
+#: 관리자 화면의 상태 라벨 (부록 B.6). 목록이 전부이며 임의 변형을 금지한다.
+GROUP_STATUS_TEMPLATES: dict[str, str] = {
+    "STOCK": "재고 {risk_count}개 부족",
+    "PEAK": "{peak_name}에 몰림",
+    "CALM": "조용한 날",
+}
+
+#: 먼저 볼 매장 문구 (부록 B.6).
+GROUP_ATTENTION_TEMPLATE = "오늘은 {dept_nm}부터 확인해 보세요"
+GROUP_ATTENTION_CALM = "오늘은 세 매장 모두 평소대로예요"
+
+#: 먼저 볼 매장을 고르는 순서 (부록 B.4). 앞에 있을수록 급하다.
+GROUP_ATTENTION_ORDER: tuple[str, ...] = ("STOCK", "PEAK")
+
 #: 위험 품목 하한 — 하루 1개도 안 나가는 꼬리 상품은 제외한다 (부록 A.4).
 MIN_SALE_AVERAGE_FOR_RISK: float = 1.0
 
@@ -591,6 +605,131 @@ def build_payload(
     return payload
 
 
+def group_avg_ticket(total_sale_amt: int, total_deal_cnt: int) -> int:
+    """여러 매장을 합친 1인당 구매액을 구한다 (부록 B.5).
+
+    매장별 1인당의 **평균이 아니다** — 손님 수가 다르므로 값이 달라진다.
+    큰 매장이 그만큼 크게 반영되어야 한다.
+
+    Args:
+        total_sale_amt: 매장 합계 매출.
+        total_deal_cnt: 매장 합계 손님 수.
+
+    Returns:
+        정수 원으로 반올림한 1인당 구매액. 손님이 없으면 0.
+    """
+    if total_deal_cnt == 0:
+        return 0
+    return round(total_sale_amt / total_deal_cnt)
+
+
+def group_status(payload: dict[str, Any]) -> tuple[str, str]:
+    """매장 하나의 상태와 라벨을 정한다 (부록 B.5·B.6).
+
+    2줄을 차지한 카드와 **항상 일치**한다 — 관리자 화면과 점포장 화면이
+    서로 다른 말을 하면 신뢰가 무너진다.
+
+    Args:
+        payload: 매장의 계산 JSON.
+
+    Returns:
+        ``(status, status_text)``.
+    """
+    card_ids = {card["card_id"] for card in payload["cards"]}
+
+    if "G3" in card_ids:
+        status = "STOCK"
+    elif "G2" in card_ids:
+        status = "PEAK"
+    else:
+        status = "CALM"
+
+    text = GROUP_STATUS_TEMPLATES[status].format(
+        risk_count=payload["stock_risk"]["risk_count"],
+        peak_name=payload["peak_block"]["name"],
+    )
+    return status, text
+
+
+def pick_attention(rows: Sequence[dict[str, Any]]) -> str | None:
+    """먼저 볼 매장을 하나 고른다 (부록 B.4).
+
+    본문 7.3의 카드 우선순위를 그대로 쓴다. 같은 순위가 여럿이면 매출이 큰 쪽이다.
+    아무 매장도 해당하지 않으면 **비운다** — 침묵할 줄 아는 것이 신뢰 조건이다.
+
+    Args:
+        rows: ``dept_cd``·``status``·``sale_amt`` 를 가진 매장 행 목록.
+
+    Returns:
+        점포코드. 해당 없으면 None.
+    """
+    for status in GROUP_ATTENTION_ORDER:
+        candidates = [row for row in rows if row["status"] == status]
+        if candidates:
+            return max(candidates, key=lambda row: row["sale_amt"])["dept_cd"]
+    return None
+
+
+def build_group_payload(saledate: str, payloads: Sequence[dict[str, Any]]) -> dict[str, Any]:
+    """그 날짜의 매장 브리핑들을 모아 그룹 요약을 만든다 (부록 B.4·B.5).
+
+    합계·1인당·먼저 볼 매장 판정이 **여기서** 끝난다. 화면은 읽어서 표시만 한다
+    (부록 B.2 — 화면이 매장을 더하면 그 합계는 "화면이 만든 숫자"가 된다).
+
+    Args:
+        saledate: ``YYYYMMDD``.
+        payloads: 그 날짜의 매장별 계산 JSON.
+
+    Returns:
+        부록 B.5의 그룹 요약 JSON.
+    """
+    rows: list[dict[str, Any]] = []
+    for payload in payloads:
+        status, status_text = group_status(payload)
+        rows.append(
+            {
+                "dept_cd": payload["dept_cd"],
+                "dept_nm": payload["dept_nm"],
+                "sale_amt": payload["sale_amt"],
+                "deal_cnt": payload["deal_cnt"],
+                "avg_ticket": payload["avg_ticket"],
+                "dow_diff_pct": payload["dow_diff_pct"],
+                "dow_baseline_available": payload["dow_baseline_available"],
+                "status": status,
+                "status_text": status_text,
+                "risk_count": payload["stock_risk"]["risk_count"],
+            }
+        )
+
+    # 매출 내림차순 고정 (부록 B.4) — 매일 순서가 바뀌면 관리자가 다시 읽어야 한다.
+    rows.sort(key=lambda row: row["sale_amt"], reverse=True)
+
+    total_sale_amt = sum(row["sale_amt"] for row in rows)
+    total_deal_cnt = sum(row["deal_cnt"] for row in rows)
+    attention = pick_attention(rows)
+
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "saledate": saledate,
+        "store_count": len(rows),
+        "total_sale_amt": total_sale_amt,
+        "total_deal_cnt": total_deal_cnt,
+        "group_avg_ticket": group_avg_ticket(total_sale_amt, total_deal_cnt),
+        "attention_dept_cd": attention,
+        "attention_count": sum(
+            1 for row in rows if row["status"] in GROUP_ATTENTION_ORDER
+        ),
+        "attention_line": (
+            GROUP_ATTENTION_TEMPLATE.format(
+                dept_nm=next(row["dept_nm"] for row in rows if row["dept_cd"] == attention)
+            )
+            if attention is not None
+            else GROUP_ATTENTION_CALM
+        ),
+        "stores": rows,
+    }
+
+
 def build_briefings(
     engine: Engine, from_date: str, to_date: str, dept_cds: Sequence[str] | None = None
 ) -> int:
@@ -618,6 +757,7 @@ def build_briefings(
     stock_groups = {key: group for key, group in stock.groupby(["DEPT_CD", "SALEDATE"])}
 
     records: list[dict[str, object]] = []
+    by_date: dict[str, list[dict[str, Any]]] = {}
     for saledate in date_range(from_date, to_date):
         for dept_cd in sorted({code for code, _ in day_index.index}):
             if (dept_cd, saledate) not in day_index.index:
@@ -666,6 +806,7 @@ def build_briefings(
                     "PAYLOAD_JSON": json.dumps(payload, ensure_ascii=False),
                 }
             )
+            by_date.setdefault(saledate, []).append(payload)
 
     statement = delete(schema.BRIEFING_DAILY).where(
         schema.BRIEFING_DAILY.c.SALEDATE.between(from_date, to_date)
@@ -678,5 +819,61 @@ def build_briefings(
         if records:
             connection.execute(schema.BRIEFING_DAILY.insert(), records)
 
-    logger.info("브리핑 생성 완료 %s ~ %s: %d건", from_date, to_date, len(records))
+    group_count = _store_group_briefings(engine, from_date, to_date, by_date, dept_cds)
+
+    logger.info(
+        "브리핑 생성 완료 %s ~ %s: %d건 (여러 매장 요약 %d건)",
+        from_date,
+        to_date,
+        len(records),
+        group_count,
+    )
+    return len(records)
+
+
+def _store_group_briefings(
+    engine: Engine,
+    from_date: str,
+    to_date: str,
+    by_date: dict[str, list[dict[str, Any]]],
+    dept_cds: Sequence[str] | None,
+) -> int:
+    """그룹 요약을 저장한다 (부록 B.4).
+
+    **일부 점포만 재생성한 경우에는 만들지 않는다.** 그 날의 매장 일부만 모은
+    합계는 "전체 합계"가 아니어서, 저장하면 관리자 화면이 틀린 수를 말하게 된다.
+
+    Args:
+        engine: 대상 엔진.
+        from_date: 시작일 ``YYYYMMDD``.
+        to_date: 종료일 ``YYYYMMDD``.
+        by_date: 날짜 → 그 날 만든 매장 계산 JSON 목록.
+        dept_cds: 이번 실행이 대상으로 삼은 점포코드. None이면 전 점포.
+
+    Returns:
+        저장한 그룹 요약 건수.
+    """
+    if dept_cds is not None:
+        logger.info("일부 점포만 재생성했으므로 여러 매장 요약은 건너뜁니다")
+        return 0
+
+    records = [
+        {
+            "SALEDATE": saledate,
+            "PAYLOAD_JSON": json.dumps(
+                build_group_payload(saledate, payloads), ensure_ascii=False
+            ),
+        }
+        for saledate, payloads in sorted(by_date.items())
+    ]
+
+    with engine.begin() as connection:
+        connection.execute(
+            delete(schema.BRIEFING_DAILY_GROUP).where(
+                schema.BRIEFING_DAILY_GROUP.c.SALEDATE.between(from_date, to_date)
+            )
+        )
+        if records:
+            connection.execute(schema.BRIEFING_DAILY_GROUP.insert(), records)
+
     return len(records)

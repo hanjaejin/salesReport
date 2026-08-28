@@ -120,6 +120,7 @@ def test_read_model_excludes_facts() -> None:
         "MART_HOUR_STORE",
         "MART_DAY_STORE_ITEM",
         "BRIEFING_DAILY",
+        "BRIEFING_DAILY_GROUP",
     ]
     for forbidden in ("FACT_RECEIPT", "FACT_RECEIPT_ITEM", "FACT_PAYMENT"):
         assert forbidden not in names
@@ -351,3 +352,21 @@ def test_cli_stops_before_copying_when_target_unreachable(
     monkeypatch.setenv(publish.TARGET_URL_ENV, "postgresql://u:p@nowhere.invalid:5432/postgres")
 
     assert publish.main([]) == 3
+
+
+def test_read_model_includes_group_briefing() -> None:
+    """부록 B.9: 관리자 화면이 읽으므로 그룹 요약도 발행 대상이다."""
+    names = [table.name for table in publish.READ_MODEL_TABLES]
+
+    assert "BRIEFING_DAILY_GROUP" in names
+
+
+def test_published_group_briefing_matches_source(source_engine: Engine, tmp_path: Path) -> None:
+    """그룹 요약이 원본과 같은 내용으로 발행된다."""
+    target = get_engine(tmp_path / "group_target.db")
+
+    publish.publish(source_engine, target)
+
+    assert _read(target, schema.BRIEFING_DAILY_GROUP, ["SALEDATE"]).equals(
+        _read(source_engine, schema.BRIEFING_DAILY_GROUP, ["SALEDATE"])
+    )
